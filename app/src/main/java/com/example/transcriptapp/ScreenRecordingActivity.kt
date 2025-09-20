@@ -325,8 +325,8 @@ class ScreenRecordingActivity : AppCompatActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 registerReceiver(recordingStoppedReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
             } else {
-                // For older versions, we still need to use RECEIVER_NOT_EXPORTED flag for security
-                registerReceiver(recordingStoppedReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                @Suppress("DEPRECATION")
+                registerReceiver(recordingStoppedReceiver, filter)
             }
             RecorderLogger.d("ScreenRecordingActivity", "Successfully registered broadcast receiver")
         } catch (e: Exception) {
