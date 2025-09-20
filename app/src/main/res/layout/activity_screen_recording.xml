@@ -50,6 +50,13 @@
         android:text="Split &amp; Save Current Clip"
         android:layout_marginBottom="32dp" />
 
+    <Button
+        android:id="@+id/splitButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Split &amp; Save Current Clip"
+        android:layout_marginBottom="32dp" />
+
     <TextView
         android:id="@+id/fileInfoTextView"
         android:layout_width="match_parent"
