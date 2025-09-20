@@ -259,9 +259,11 @@ class ScreenRecordService : Service() {
                 "restartAfterStop" to restartAfterStop
             )
 
+            val shouldStopMediaProjection = !restartAfterStop
+
             if (!isRecording) {
                 RecorderLogger.w("ScreenRecordService", "Stop requested with no active recording")
-                cleanup(stopMediaProjection = true)
+                cleanup(stopMediaProjection = shouldStopMediaProjection)
                 isRecording = false
                 if (!restartAfterStop) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
@@ -276,7 +278,7 @@ class ScreenRecordService : Service() {
             val finalOutput = outputFile
             if (finalOutput == null) {
                 RecorderLogger.e("ScreenRecordService", "Output file reference missing")
-                cleanup(stopMediaProjection = true)
+                cleanup(stopMediaProjection = shouldStopMediaProjection)
                 isRecording = false
                 if (!restartAfterStop) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
@@ -290,7 +292,7 @@ class ScreenRecordService : Service() {
 
             recordingDuration = System.currentTimeMillis() - recordingStartTime
 
-            cleanup(stopMediaProjection = true)
+            cleanup(stopMediaProjection = shouldStopMediaProjection)
 
             if (finalOutput.exists() && finalOutput.length() > 0) {
                 RecorderLogger.file("ScreenRecordService", "VERIFY", finalOutput.absolutePath, finalOutput.length())
