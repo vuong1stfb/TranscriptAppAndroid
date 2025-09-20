@@ -1,0 +1,35 @@
+# IntelliJ / Android Studio project files
+*.iml
+.idea/
+
+# Gradle build cache & config generated per-machine
+.gradle/
+build/
+app/build/
+
+# Android Studio local configuration
+/local.properties
+local.properties
+
+# Native build intermediates
+.externalNativeBuild/
+.cxx/
+
+# Captured device output
+captures/
+
+# macOS metadata
+.DS_Store
+
+# Keystores / signing artifacts (kept local)
+*.jks
+*.keystore
+
+# Generated reports & APK/AAB outputs
+*.apk
+*.aab
+*.ap_ 
+*.hprof
+
+# Kotlin/Java build caches
+.kotlin/
