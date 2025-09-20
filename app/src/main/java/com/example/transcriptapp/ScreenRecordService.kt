@@ -30,6 +30,7 @@ class ScreenRecordService : Service() {
     companion object {
         const val ACTION_START = "action_start"
         const val ACTION_STOP = "action_stop"
+        const val ACTION_SPLIT = "action_split"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
         const val EXTRA_OUTPUT_FILE_PATH = "output_file_path"
@@ -46,6 +47,9 @@ class ScreenRecordService : Service() {
     private var isRecording = false
     private var recordingStartTime: Long = 0
     private var recordingDuration: Long = 0
+
+    private var projectionResultCode: Int = Activity.RESULT_CANCELED
+    private var projectionResultData: Intent? = null
 
     private lateinit var mediaProjectionManager: MediaProjectionManager
     private lateinit var notificationManager: NotificationManager
@@ -94,6 +98,7 @@ class ScreenRecordService : Service() {
                 startRecording(resultCode, resultData)
             }
             ACTION_STOP -> stopRecording()
+            ACTION_SPLIT -> splitRecording()
         }
 
         return START_STICKY
@@ -124,11 +129,11 @@ class ScreenRecordService : Service() {
             startForeground(NOTIFICATION_ID, createNotification("Starting recording..."))
             RecorderLogger.service("ScreenRecordService", "FOREGROUND", "Service started in foreground")
 
+            projectionResultCode = resultCode
+            projectionResultData = Intent(resultData)
+
             // Get MediaProjection
-            mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, resultData)
-            if (mediaProjection == null) {
-                throw Exception("Failed to get MediaProjection")
-            }
+            mediaProjection = acquireMediaProjection()
 
             // Start the recording process
             startRecordingInternal()
@@ -143,8 +148,7 @@ class ScreenRecordService : Service() {
         try {
             RecorderLogger.methodEntry("ScreenRecordService", "startRecordingInternal")
 
-            val projection = mediaProjection
-                ?: throw IllegalStateException("MediaProjection not available")
+            val projection = acquireMediaProjection()
 
             val config = RecordingConfigFactory.create(resources.displayMetrics)
             logRecordingConfig(config)
@@ -213,48 +217,109 @@ class ScreenRecordService : Service() {
         }
     }
 
-    private fun stopRecordingInternal() {
+    private fun splitRecording() {
         try {
-            RecorderLogger.methodEntry("ScreenRecordService", "stopRecordingInternal")
+            RecorderLogger.media("ScreenRecordService", "SPLIT", "Splitting current recording segment")
+
+            if (!isRecording) {
+                RecorderLogger.w("ScreenRecordService", "Split requested with no active recording")
+                return
+            }
+
+            if (mediaProjection == null) {
+                RecorderLogger.e("ScreenRecordService", "MediaProjection unavailable during split request")
+                cleanup()
+                stopSelf()
+                return
+            }
+
+            stopRecordingInternal(restartAfterStop = true)
+
+            try {
+                acquireMediaProjection()
+            } catch (e: Exception) {
+                RecorderLogger.e("ScreenRecordService", "MediaProjection unavailable after split", e)
+                stopSelf()
+                return
+            }
+
+            startRecordingInternal()
+        } catch (e: Exception) {
+            RecorderLogger.e("ScreenRecordService", "Error handling split request", e)
+            cleanup()
+            stopSelf()
+        }
+    }
+
+    private fun stopRecordingInternal(restartAfterStop: Boolean = false) {
+        try {
+            RecorderLogger.methodEntry(
+                "ScreenRecordService",
+                "stopRecordingInternal",
+                "restartAfterStop" to restartAfterStop
+            )
 
             if (!isRecording) {
                 RecorderLogger.w("ScreenRecordService", "Stop requested with no active recording")
-                cleanup()
-                stopSelf()
+                cleanup(stopMediaProjection = true)
+                isRecording = false
+                if (!restartAfterStop) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    RecorderLogger.service("ScreenRecordService", "BACKGROUND", "Service stopped foreground state (no active recording)")
+                }
+                if (!restartAfterStop) {
+                    stopSelf()
+                }
                 return
             }
 
             val finalOutput = outputFile
             if (finalOutput == null) {
                 RecorderLogger.e("ScreenRecordService", "Output file reference missing")
-                cleanup()
-                stopSelf()
+                cleanup(stopMediaProjection = true)
+                isRecording = false
+                if (!restartAfterStop) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    RecorderLogger.service("ScreenRecordService", "BACKGROUND", "Service stopped foreground state (missing file)")
+                }
+                if (!restartAfterStop) {
+                    stopSelf()
+                }
                 return
             }
 
-            projectionRecorder?.runCatching { stop() }
-                ?.onFailure { RecorderLogger.e("ScreenRecordService", "Error stopping ProjectionRecorder", it) }
-            projectionRecorder = null
+            recordingDuration = System.currentTimeMillis() - recordingStartTime
 
-            cleanup()
+            cleanup(stopMediaProjection = true)
 
             if (finalOutput.exists() && finalOutput.length() > 0) {
-                recordingDuration = System.currentTimeMillis() - recordingStartTime
                 RecorderLogger.file("ScreenRecordService", "VERIFY", finalOutput.absolutePath, finalOutput.length())
-                RecorderLogger.media("ScreenRecordService", "STOP", "Recording completed successfully (${recordingDuration}ms)")
+                val event = if (restartAfterStop) "SPLIT_SEGMENT" else "STOP"
+                RecorderLogger.media(
+                    "ScreenRecordService",
+                    event,
+                    "Recording segment finalized (${recordingDuration}ms)"
+                )
                 recordingFileManager.logMetadata(finalOutput, recordingDuration)
                 sendRecordingStoppedBroadcast(finalOutput.absolutePath)
             } else {
-                RecorderLogger.e("ScreenRecordService", "Recording file is empty or missing at ${finalOutput.absolutePath}")
+                RecorderLogger.e(
+                    "ScreenRecordService",
+                    "Recording file is empty or missing at ${finalOutput.absolutePath}"
+                )
             }
 
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            RecorderLogger.service("ScreenRecordService", "BACKGROUND", "Service stopped foreground state")
-
+            outputFile = null
             isRecording = false
 
-            RecorderLogger.methodExit("ScreenRecordService", "stopRecordingInternal", "success")
-            stopSelf()
+            if (!restartAfterStop) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                RecorderLogger.service("ScreenRecordService", "BACKGROUND", "Service stopped foreground state")
+                RecorderLogger.methodExit("ScreenRecordService", "stopRecordingInternal", "success")
+                stopSelf()
+            } else {
+                RecorderLogger.methodExit("ScreenRecordService", "stopRecordingInternal", "restart_pending")
+            }
 
         } catch (e: Exception) {
             RecorderLogger.e("ScreenRecordService", "Error in stopRecordingInternal", e)
@@ -263,7 +328,7 @@ class ScreenRecordService : Service() {
         }
     }
 
-    private fun cleanup() {
+    private fun cleanup(stopMediaProjection: Boolean = true) {
         try {
             RecorderLogger.d("ScreenRecordService", "Cleaning up resources")
 
@@ -273,19 +338,40 @@ class ScreenRecordService : Service() {
                 ?.onFailure { RecorderLogger.e("ScreenRecordService", "Error stopping recorder during cleanup", it) }
             projectionRecorder = null
 
-            if (mediaProjectionCallbackRegistered) {
-                mediaProjection?.unregisterCallback(mediaProjectionCallback)
-                mediaProjectionCallbackRegistered = false
-                RecorderLogger.d("ScreenRecordService", "MediaProjection callback unregistered")
-            }
+            if (stopMediaProjection) {
+                if (mediaProjectionCallbackRegistered) {
+                    mediaProjection?.unregisterCallback(mediaProjectionCallback)
+                    mediaProjectionCallbackRegistered = false
+                    RecorderLogger.d("ScreenRecordService", "MediaProjection callback unregistered")
+                }
 
-            mediaProjection?.stop()
-            mediaProjection = null
+                mediaProjection?.stop()
+                mediaProjection = null
+            }
 
             RecorderLogger.d("ScreenRecordService", "Resources cleaned up")
         } catch (e: Exception) {
             RecorderLogger.e("ScreenRecordService", "Error during cleanup", e)
         }
+    }
+
+    private fun acquireMediaProjection(): MediaProjection {
+        mediaProjection?.let { return it }
+
+        if (projectionResultCode != Activity.RESULT_OK) {
+            throw IllegalStateException("MediaProjection not available: result code=$projectionResultCode")
+        }
+
+        val tokenIntent = projectionResultData
+            ?: throw IllegalStateException("MediaProjection token missing")
+
+        val projection = mediaProjectionManager.getMediaProjection(projectionResultCode, Intent(tokenIntent))
+            ?: throw IllegalStateException("Failed to obtain MediaProjection")
+
+        mediaProjection = projection
+        mediaProjectionCallbackRegistered = false
+
+        return projection
     }
 
     private fun sendRecordingStoppedBroadcast(filePath: String) {
