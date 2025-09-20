@@ -30,6 +30,7 @@ class ScreenRecordingActivity : AppCompatActivity() {
 
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
+    private lateinit var splitButton: Button
     private lateinit var fileInfoTextView: TextView
 
     private lateinit var requestPermissionLauncher: ActivityResultLauncher<String>
@@ -58,10 +59,12 @@ class ScreenRecordingActivity : AppCompatActivity() {
             
             startButton = findViewById(R.id.startButton)
             stopButton = findViewById(R.id.stopButton)
+            splitButton = findViewById(R.id.splitButton)
             fileInfoTextView = findViewById(R.id.fileInfoTextView)
             val viewRecordingsButton: Button = findViewById(R.id.viewRecordingsButton)
 
             stopButton.isEnabled = false
+            splitButton.isEnabled = false
 
             requestPermissionLauncher = registerForActivityResult(
                 ActivityResultContracts.RequestPermission()
@@ -103,6 +106,7 @@ class ScreenRecordingActivity : AppCompatActivity() {
                     isRecording = true
                     startButton.isEnabled = false
                     stopButton.isEnabled = true
+                    splitButton.isEnabled = true
                     Toast.makeText(this, "Recording started", Toast.LENGTH_SHORT).show()
                 } else {
                     // Handle different error cases
@@ -120,6 +124,7 @@ class ScreenRecordingActivity : AppCompatActivity() {
                     isRecording = false
                     startButton.isEnabled = true
                     stopButton.isEnabled = false
+                    splitButton.isEnabled = false
                 }
             }
 
@@ -133,6 +138,10 @@ class ScreenRecordingActivity : AppCompatActivity() {
 
             stopButton.setOnClickListener {
                 stopRecording()
+            }
+
+            splitButton.setOnClickListener {
+                splitRecording()
             }
             
             viewRecordingsButton.setOnClickListener {
@@ -219,10 +228,11 @@ class ScreenRecordingActivity : AppCompatActivity() {
             isRecording = false
             startButton.isEnabled = true
             stopButton.isEnabled = false
+            splitButton.isEnabled = false
 
             RecorderLogger.state("ScreenRecordingActivity", "isRecording", true, false)
             RecorderLogger.media("ScreenRecordingActivity", "STOP", "Recording stopped by user")
-            
+
             // Show the file location more clearly
             val moviesPath = getExternalFilesDir(Environment.DIRECTORY_MOVIES)?.absolutePath ?: "Movies folder"
             fileInfoTextView.text = "Recording stopped.\nFile saved in:\n$moviesPath"
@@ -230,6 +240,22 @@ class ScreenRecordingActivity : AppCompatActivity() {
         } catch (e: Exception) {
             RecorderLogger.e("ScreenRecordingActivity", "Error stopping recording", e)
             Toast.makeText(this, "Failed to stop recording: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun splitRecording() {
+        if (!isRecording) {
+            Toast.makeText(this, "Không có phiên ghi nào để cắt", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            RecorderLogger.methodEntry("ScreenRecordingActivity", "splitRecording")
+            startService(Intent(this, ScreenRecordService::class.java).apply { action = ScreenRecordService.ACTION_SPLIT })
+            Toast.makeText(this, "Đã lưu đoạn hiện tại, tiếp tục ghi mới", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            RecorderLogger.e("ScreenRecordingActivity", "Error splitting recording", e)
+            Toast.makeText(this, "Không thể cắt bản ghi: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
         }
     }
     
