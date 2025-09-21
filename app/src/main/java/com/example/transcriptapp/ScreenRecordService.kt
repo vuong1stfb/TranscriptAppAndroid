@@ -233,7 +233,7 @@ class ScreenRecordService : Service() {
                 return
             }
 
-            stopRecordingInternal(restartAfterStop = true)
+            stopRecordingInternal(restartAfterStop = true, stopMediaProjection = false)
 
             try {
                 acquireMediaProjection()
@@ -251,7 +251,10 @@ class ScreenRecordService : Service() {
         }
     }
 
-    private fun stopRecordingInternal(restartAfterStop: Boolean = false) {
+    private fun stopRecordingInternal(
+        restartAfterStop: Boolean = false,
+        stopMediaProjection: Boolean = true
+    ) {
         try {
             RecorderLogger.methodEntry(
                 "ScreenRecordService",
@@ -261,7 +264,7 @@ class ScreenRecordService : Service() {
 
             if (!isRecording) {
                 RecorderLogger.w("ScreenRecordService", "Stop requested with no active recording")
-                cleanup(stopMediaProjection = true)
+                cleanup(stopMediaProjection = stopMediaProjection)
                 isRecording = false
                 if (!restartAfterStop) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
@@ -276,7 +279,7 @@ class ScreenRecordService : Service() {
             val finalOutput = outputFile
             if (finalOutput == null) {
                 RecorderLogger.e("ScreenRecordService", "Output file reference missing")
-                cleanup(stopMediaProjection = true)
+                cleanup(stopMediaProjection = stopMediaProjection)
                 isRecording = false
                 if (!restartAfterStop) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
@@ -290,7 +293,7 @@ class ScreenRecordService : Service() {
 
             recordingDuration = System.currentTimeMillis() - recordingStartTime
 
-            cleanup(stopMediaProjection = true)
+            cleanup(stopMediaProjection = stopMediaProjection)
 
             if (finalOutput.exists() && finalOutput.length() > 0) {
                 RecorderLogger.file("ScreenRecordService", "VERIFY", finalOutput.absolutePath, finalOutput.length())
