@@ -293,6 +293,10 @@ class ScreenRecordService : Service() {
 
             recordingDuration = System.currentTimeMillis() - recordingStartTime
 
+            if (!stopMediaProjection) {
+                unregisterMediaProjectionCallbackIfNeeded()
+            }
+
             cleanup(stopMediaProjection = stopMediaProjection)
 
             if (finalOutput.exists() && finalOutput.length() > 0) {
@@ -342,12 +346,7 @@ class ScreenRecordService : Service() {
             projectionRecorder = null
 
             if (stopMediaProjection) {
-                if (mediaProjectionCallbackRegistered) {
-                    mediaProjection?.unregisterCallback(mediaProjectionCallback)
-                    mediaProjectionCallbackRegistered = false
-                    RecorderLogger.d("ScreenRecordService", "MediaProjection callback unregistered")
-                }
-
+                unregisterMediaProjectionCallbackIfNeeded()
                 mediaProjection?.stop()
                 mediaProjection = null
             }
@@ -375,6 +374,18 @@ class ScreenRecordService : Service() {
         mediaProjectionCallbackRegistered = false
 
         return projection
+    }
+
+    private fun unregisterMediaProjectionCallbackIfNeeded() {
+        if (mediaProjectionCallbackRegistered) {
+            runCatching {
+                mediaProjection?.unregisterCallback(mediaProjectionCallback)
+            }.onFailure {
+                RecorderLogger.e("ScreenRecordService", "Error unregistering MediaProjection callback", it)
+            }
+            mediaProjectionCallbackRegistered = false
+            RecorderLogger.d("ScreenRecordService", "MediaProjection callback unregistered")
+        }
     }
 
     private fun sendRecordingStoppedBroadcast(filePath: String) {
