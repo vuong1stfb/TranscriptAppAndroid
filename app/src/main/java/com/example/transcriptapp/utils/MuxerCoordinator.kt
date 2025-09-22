@@ -5,85 +5,92 @@ import android.media.MediaFormat
 import android.media.MediaMuxer
 import java.io.File
 
-class MuxerCoordinator(outputFile: File, private val loggerTag: String) {
+class MuxerCoordinator(private val outputFile: File) {
 
-    private val muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+    private var muxer: MediaMuxer? = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
     private val lock = Any()
 
     private var videoTrackIndex: Int = -1
     private var audioTrackIndex: Int = -1
     private var started = false
 
-    fun addVideoTrack(format: MediaFormat): Int = synchronized(lock) {
-        videoTrackIndex = muxer.addTrack(format)
-        logFormat("Video", format)
+    fun setVideoFormat(format: MediaFormat): Int = synchronized(lock) {
+        videoTrackIndex = muxer!!.addTrack(format)
         startIfReady()
         videoTrackIndex
     }
 
-    fun addAudioTrack(format: MediaFormat): Int = synchronized(lock) {
-        audioTrackIndex = muxer.addTrack(format)
-        logFormat("Audio", format)
+    fun setAudioFormat(format: MediaFormat): Int = synchronized(lock) {
+        audioTrackIndex = muxer!!.addTrack(format)
         startIfReady()
         audioTrackIndex
     }
 
-    fun writeSample(trackType: TrackType, encodedBuffer: java.nio.ByteBuffer, bufferInfo: MediaCodec.BufferInfo) {
+    fun writeSampleVideo(encodedBuffer: java.nio.ByteBuffer, bufferInfo: MediaCodec.BufferInfo) {
         synchronized(lock) {
             if (!started) return
-            val trackIndex = when (trackType) {
-                TrackType.VIDEO -> videoTrackIndex
-                TrackType.AUDIO -> audioTrackIndex
+            if (videoTrackIndex >= 0) {
+                muxer?.writeSampleData(videoTrackIndex, encodedBuffer, bufferInfo)
             }
-            if (trackIndex >= 0) {
-                muxer.writeSampleData(trackIndex, encodedBuffer, bufferInfo)
+        }
+    }
+
+    fun writeSampleAudio(encodedBuffer: java.nio.ByteBuffer, bufferInfo: MediaCodec.BufferInfo) {
+        synchronized(lock) {
+            if (!started) return
+            if (audioTrackIndex >= 0) {
+                muxer?.writeSampleData(audioTrackIndex, encodedBuffer, bufferInfo)
             }
         }
     }
 
     fun stopAndRelease() {
         synchronized(lock) {
-            runCatching {
+            try {
                 if (started) {
-                    muxer.stop()
+                    muxer?.stop()
                 }
-            }.onFailure { RecorderLogger.e(loggerTag, "Error stopping muxer", it) }
-            runCatching { muxer.release() }
-                .onFailure { RecorderLogger.e(loggerTag, "Error releasing muxer", it) }
-            started = false
-            videoTrackIndex = -1
-            audioTrackIndex = -1
+            } catch (_: Exception) {
+            } finally {
+                try { muxer?.release() } catch (_: Exception) {}
+                muxer = null
+                videoTrackIndex = -1
+                audioTrackIndex = -1
+                started = false
+            }
         }
     }
 
     private fun startIfReady() {
         if (!started && videoTrackIndex >= 0 && audioTrackIndex >= 0) {
-            muxer.start()
+            muxer?.start()
             started = true
-            RecorderLogger.d(loggerTag, "MediaMuxer started with tracks video=$videoTrackIndex audio=$audioTrackIndex")
         }
     }
 
-    private fun logFormat(prefix: String, format: MediaFormat) {
-        val mime = safeGetString(format, MediaFormat.KEY_MIME)
-        val width = safeGetInt(format, MediaFormat.KEY_WIDTH)
-        val height = safeGetInt(format, MediaFormat.KEY_HEIGHT)
-        val frameRate = safeGetInt(format, MediaFormat.KEY_FRAME_RATE)
-        val bitRate = safeGetInt(format, MediaFormat.KEY_BIT_RATE)
-        RecorderLogger.d(
-            loggerTag,
-            "$prefix encoder output: ${mime ?: ""} ${dimension(width, height)} fps=${frameRate ?: -1} bitrate=${bitRate ?: -1}"
-        )
+    /**
+     * Rotate muxer output to a new file without stopping encoders.
+     * Caller must pass the cached encoder output formats.
+     */
+    fun rotateTo(newFile: File, videoFormat: MediaFormat, audioFormat: MediaFormat) {
+        synchronized(lock) {
+            // Close current file
+            try {
+                if (started) {
+                    muxer?.stop()
+                }
+            } catch (_: Exception) {}
+            try { muxer?.release() } catch (_: Exception) {}
+
+            // Open new muxer
+            muxer = MediaMuxer(newFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            videoTrackIndex = muxer!!.addTrack(videoFormat)
+            audioTrackIndex = muxer!!.addTrack(audioFormat)
+            muxer!!.start()
+            started = true
+        }
     }
 
-    private fun dimension(width: Int?, height: Int?): String =
-        if (width != null && height != null) "${width}x$height" else "unknown"
-
-    private fun safeGetInt(format: MediaFormat, key: String): Int? =
-        if (format.containsKey(key)) format.getInteger(key) else null
-
-    private fun safeGetString(format: MediaFormat, key: String): String? =
-        if (format.containsKey(key)) format.getString(key) else null
-
-    enum class TrackType { VIDEO, AUDIO }
+    fun isStarted(): Boolean = synchronized(lock) { started }
+    fun hasMuxer(): Boolean = synchronized(lock) { muxer != null }
 }

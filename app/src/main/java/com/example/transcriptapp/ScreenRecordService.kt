@@ -23,6 +23,7 @@ import com.example.transcriptapp.utils.RecordingConfigFactory
 import com.example.transcriptapp.utils.RecordingFileManager
 import java.io.File
 import com.example.transcriptapp.utils.ProjectionRecorder
+import com.example.transcriptapp.utils.MuxerCoordinator
 import com.example.transcriptapp.utils.RecorderLogger
 
 class ScreenRecordService : Service() {
@@ -43,7 +44,9 @@ class ScreenRecordService : Service() {
 
     private var mediaProjection: MediaProjection? = null
     private var projectionRecorder: ProjectionRecorder? = null
+    private var muxerCoordinator: MuxerCoordinator? = null
     private var outputFile: File? = null
+    private var previousFilePath: String? = null
     private var isRecording = false
     private var recordingStartTime: Long = 0
     private var recordingDuration: Long = 0
@@ -98,7 +101,23 @@ class ScreenRecordService : Service() {
                 startRecording(resultCode, resultData)
             }
             ACTION_STOP -> stopRecording()
-            ACTION_SPLIT -> splitRecording()
+            ACTION_SPLIT -> {
+                RecorderLogger.media("ScreenRecordService", "SPLIT", "Splitting current recording segment")
+                // Create next file and rotate muxer if recorder is alive
+                val nextFile = recordingFileManager.createOutputFile()
+                val ok = projectionRecorder?.rotateMuxer(nextFile) ?: false
+                if (!ok) {
+                    // Fallback: do hard restart only when formats are not ready
+                    stopRecordingInternal(restartAfterStop = true, stopMediaProjection = false)
+                } else {
+                    // Optionally broadcast segment finalized event for previous file
+                    previousFilePath = outputFile?.absolutePath
+                    outputFile = nextFile
+                    if (previousFilePath != null) {
+                        sendRecordingStoppedBroadcast(previousFilePath!!)
+                    }
+                }
+            }
         }
 
         return START_STICKY
@@ -155,11 +174,14 @@ class ScreenRecordService : Service() {
 
             outputFile = recordingFileManager.createOutputFile()
 
+            muxerCoordinator = MuxerCoordinator(outputFile ?: throw IllegalStateException("Output file missing"))
+
             registerMediaProjectionCallbackIfNeeded()
 
             projectionRecorder = ProjectionRecorder(
                 mediaProjection = projection,
                 recordingConfig = config,
+                muxerCoordinator = muxerCoordinator ?: throw IllegalStateException("MuxerCoordinator missing"),
                 outputFile = outputFile ?: throw IllegalStateException("Output file missing")
             ).also { recorder ->
                 recorder.start()

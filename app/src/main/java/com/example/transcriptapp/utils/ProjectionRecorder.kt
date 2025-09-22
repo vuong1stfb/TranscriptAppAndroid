@@ -11,6 +11,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.projection.MediaProjection
+import android.os.Bundle
 import android.view.Surface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,11 +30,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ProjectionRecorder(
     private val mediaProjection: MediaProjection,
     private val recordingConfig: RecordingConfig,
+    private val muxerCoordinator: MuxerCoordinator,
     private val outputFile: File,
-    private val loggerTag: String = "ProjectionRecorder"
+    private val logger: (String) -> Unit = { RecorderLogger.d("ProjectionRecorder", it) }
 ) {
 
     private val recorderLogger = RecorderLogger
+    private val loggerTag = "ProjectionRecorder"
 
     private val recording = AtomicBoolean(false)
 
@@ -49,8 +52,12 @@ class ProjectionRecorder(
     private var inputSurface: Surface? = null
     private var audioEncoder: MediaCodec? = null
     private var audioRecord: AudioRecord? = null
-    private val muxerCoordinator = MuxerCoordinator(outputFile, loggerTag)
-    private val recordingStats = RecordingStats(loggerTag)
+
+    // Cached formats to allow muxer rotation
+    @Volatile private var cachedVideoFormat: MediaFormat? = null
+    @Volatile private var cachedAudioFormat: MediaFormat? = null
+
+    private val recordingStats = RecordingStats("ProjectionRecorder")
 
     private val videoBufferInfo = MediaCodec.BufferInfo()
     private val audioBufferInfo = MediaCodec.BufferInfo()
@@ -125,6 +132,28 @@ class ProjectionRecorder(
             recordingStats.reset()
             audioPresentationTimeUs = 0L
         }
+    }
+
+    /**
+     * Rotate current output to a new file. Keep encoders and virtual display alive.
+     * Returns true if rotation succeeded.
+     */
+    fun rotateMuxer(newFile: File): Boolean {
+        val vFmt = cachedVideoFormat
+        val aFmt = cachedAudioFormat
+        if (vFmt == null || aFmt == null) {
+            logger("rotateMuxer() skipped: formats not ready")
+            return false
+        }
+        muxerCoordinator.rotateTo(newFile, vFmt, aFmt)
+        // Try to request a keyframe so the new file starts cleanly
+        try {
+            val b = Bundle().apply {
+                putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
+            }
+            videoEncoder?.setParameters(b)
+        } catch (_: Throwable) {}
+        return true
     }
 
     private fun prepareEncoders() {
@@ -248,7 +277,8 @@ class ProjectionRecorder(
                         }
                     }
                     outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        muxerCoordinator.addVideoTrack(encoder.outputFormat)
+                        cachedVideoFormat = encoder.outputFormat
+                        muxerCoordinator.setVideoFormat(encoder.outputFormat)
                     }
                     outputIndex >= 0 -> {
                         val encodedBuffer = encoder.getOutputBuffer(outputIndex)
@@ -264,7 +294,7 @@ class ProjectionRecorder(
                                 val rawPtsUs = videoBufferInfo.presentationTimeUs
                                 val normalizedPtsUs = recordingStats.normaliseVideoPts(rawPtsUs)
                                 videoBufferInfo.presentationTimeUs = normalizedPtsUs
-                                muxerCoordinator.writeSample(MuxerCoordinator.TrackType.VIDEO, encodedBuffer, videoBufferInfo)
+                                muxerCoordinator.writeSampleVideo(encodedBuffer, videoBufferInfo)
                                 recordingStats.onVideoSample(rawPtsUs, normalizedPtsUs, videoBufferInfo)
                             }
 
@@ -373,7 +403,8 @@ class ProjectionRecorder(
                     }
                 }
                 outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    muxerCoordinator.addAudioTrack(encoder.outputFormat)
+                    cachedAudioFormat = encoder.outputFormat
+                    muxerCoordinator.setAudioFormat(encoder.outputFormat)
                 }
                 outputIndex >= 0 -> {
                     val encodedBuffer = encoder.getOutputBuffer(outputIndex)
@@ -382,7 +413,7 @@ class ProjectionRecorder(
                             encodedBuffer.position(audioBufferInfo.offset)
                             encodedBuffer.limit(audioBufferInfo.offset + audioBufferInfo.size)
                             recordingStats.onAudioSample(audioBufferInfo)
-                            muxerCoordinator.writeSample(MuxerCoordinator.TrackType.AUDIO, encodedBuffer, audioBufferInfo)
+                            muxerCoordinator.writeSampleAudio(encodedBuffer, audioBufferInfo)
                         }
                         val eos = (audioBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
                         encoder.releaseOutputBuffer(outputIndex, false)
