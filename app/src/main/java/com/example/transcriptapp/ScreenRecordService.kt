@@ -32,11 +32,15 @@ class ScreenRecordService : Service() {
         const val ACTION_START = "action_start"
         const val ACTION_STOP = "action_stop"
         const val ACTION_SPLIT = "action_split"
+        const val ACTION_PAUSE = "action_pause" // Added for pause functionality
+        const val ACTION_RESUME = "action_resume" // Added for resume functionality
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
         const val EXTRA_OUTPUT_FILE_PATH = "output_file_path"
+        const val EXTRA_STATE = "extra_state" // Added for state representation
 
         const val BROADCAST_RECORDING_STOPPED = "com.example.transcriptapp.RECORDING_STOPPED"
+        const val BROADCAST_STATE = "com.example.transcriptapp.RECORDING_STATE" // Added for state broadcast
 
         private const val NOTIFICATION_CHANNEL_ID = "screen_record_channel"
         private const val NOTIFICATION_ID = 1
@@ -118,6 +122,17 @@ class ScreenRecordService : Service() {
                     }
                 }
             }
+            ACTION_PAUSE -> {
+                if (isRecording) {
+                    // Pause logic here
+                    sendRecordingStateBroadcast("paused") // Thông báo trạng thái pause
+                }
+            }
+            ACTION_RESUME -> {
+                // Resume logic here
+                isRecording = true
+                sendRecordingStateBroadcast("recording") // Thông báo trạng thái resume
+            }
         }
 
         return START_STICKY
@@ -144,9 +159,13 @@ class ScreenRecordService : Service() {
             // Create notification channel
             createNotificationChannel()
 
-            // Start foreground service
-            startForeground(NOTIFICATION_ID, createNotification("Starting recording..."))
-            RecorderLogger.service("ScreenRecordService", "FOREGROUND", "Service started in foreground")
+                // Now that projection is ready, it's safe and expected to run as FGS
+                try {
+                    startForeground(NOTIFICATION_ID, createNotification("Recording…"))
+                    RecorderLogger.service("ScreenRecordService", "FOREGROUND", "Service started in foreground")
+                } catch (se: SecurityException) {
+                    RecorderLogger.e("ScreenRecordService", "startForeground failed", se)
+                }
 
             projectionResultCode = resultCode
             projectionResultData = Intent(resultData)
@@ -192,6 +211,7 @@ class ScreenRecordService : Service() {
 
             RecorderLogger.media("ScreenRecordService", "START", "Recording started with system audio only")
             updateNotification("Recording system audio…")
+            sendRecordingStateBroadcast("recording") // Thông báo trạng thái bắt đầu ghi
 
         } catch (e: Exception) {
             RecorderLogger.e("ScreenRecordService", "Failed to start recording internal", e)
@@ -231,7 +251,7 @@ class ScreenRecordService : Service() {
             }
 
             stopRecordingInternal()
-
+            sendRecordingStateBroadcast("stopped") // Thông báo trạng thái dừng ghi
         } catch (e: Exception) {
             RecorderLogger.e("ScreenRecordService", "Error stopping recording", e)
             cleanup()
@@ -345,9 +365,11 @@ class ScreenRecordService : Service() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 RecorderLogger.service("ScreenRecordService", "BACKGROUND", "Service stopped foreground state")
                 RecorderLogger.methodExit("ScreenRecordService", "stopRecordingInternal", "success")
+                sendRecordingStateBroadcast("stopped") // Thông báo trạng thái dừng ghi
                 stopSelf()
             } else {
                 RecorderLogger.methodExit("ScreenRecordService", "stopRecordingInternal", "restart_pending")
+                sendRecordingStateBroadcast("recording") // Nếu restart thì báo lại trạng thái đang ghi
             }
 
         } catch (e: Exception) {
@@ -421,6 +443,14 @@ class ScreenRecordService : Service() {
         } catch (e: Exception) {
             RecorderLogger.e("ScreenRecordService", "Error sending broadcast", e)
         }
+    }
+
+    private fun sendRecordingStateBroadcast(state: String) {
+        val intent = Intent(BROADCAST_STATE).apply {
+            putExtra(EXTRA_STATE, state)
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
     }
 
     private fun logRecordingConfig(config: RecordingConfig) {

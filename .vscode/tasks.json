@@ -1,0 +1,25 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Gradle assemble debug",
+			"type": "shell",
+			"command": "./gradlew assembleDebug",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gradle-no-daemon"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build with Java 17",
+			"type": "shell",
+			"command": "export JAVA_HOME=$(/usr/libexec/java_home -v 17) && echo Using JAVA_HOME=$JAVA_HOME && ./gradlew --no-daemon assembleDebug",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gradle-no-daemon"
+			],
+			"group": "build"
+		}
+	]
+}
