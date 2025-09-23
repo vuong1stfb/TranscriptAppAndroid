@@ -14,17 +14,27 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val statusText: TextView = findViewById(R.id.overlayStatus)
-        val btnGrant: Button = findViewById(R.id.btnGrantOverlay)
-        val btnStartOverlay: Button = findViewById(R.id.btnStartOverlay)
-
-        fun refresh() {
-            val granted = Settings.canDrawOverlays(this)
-            statusText.text = if (granted) "Overlay: granted" else "Overlay: not granted"
-            btnStartOverlay.isEnabled = granted
+        // Kiểm tra trạng thái đăng nhập, nếu chưa đăng nhập thì chuyển về LoginActivity
+        val prefs = getSharedPreferences("auth_prefs", MODE_PRIVATE)
+        val isLoggedIn = prefs.getString("access_token", null) != null
+        if (!isLoggedIn) {
+            val intent = Intent(this, LoginActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
+            finish()
+            return
         }
 
-        btnGrant.setOnClickListener {
+        val btnStartOverlay: Button = findViewById(R.id.btnStartOverlay)
+        btnStartOverlay.setOnClickListener {
+            // No action string is required; the service shows overlay in onCreate
+            startService(Intent(this, OverlayService::class.java))
+        }
+
+        val btnGrantOverlay: Button = findViewById(R.id.btnGrantOverlay)
+        val btnLogout: Button = findViewById(R.id.btnLogout)
+
+        btnGrantOverlay.setOnClickListener {
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:$packageName")
@@ -32,11 +42,16 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        btnStartOverlay.setOnClickListener {
-            // No action string is required; the service shows overlay in onCreate
-            startService(Intent(this, OverlayService::class.java))
-        }
 
-        refresh()
+        btnLogout.setOnClickListener {
+            // Xóa dữ liệu đăng nhập trong SharedPreferences
+            val prefs = getSharedPreferences("auth_prefs", MODE_PRIVATE)
+            prefs.edit().clear().apply()
+            // Chuyển về màn hình đăng nhập
+            val intent = Intent(this, LoginActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
+            finish()
+        }
     }
 }
