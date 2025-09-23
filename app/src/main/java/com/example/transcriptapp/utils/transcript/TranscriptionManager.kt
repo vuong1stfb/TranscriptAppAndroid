@@ -1,8 +1,10 @@
 package com.example.transcriptapp.utils.transcript
 
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import com.example.transcriptapp.model.transcript.TranscriptRequest
+import com.example.transcriptapp.overlay.SubtitleOverlayService
 import com.example.transcriptapp.repository.AuthRepository
 import com.example.transcriptapp.repository.transcript.TranscriptRepository
 import com.example.transcriptapp.repository.transcript.TranscriptRepositoryImpl
@@ -71,17 +73,12 @@ class TranscriptionManager(
                 withContext(Dispatchers.Main) {
                     result.fold(
                         onSuccess = { transcriptionText ->
-                            // Show success toast with transcription text
-                            val displayText = if (transcriptionText.length > 100) {
-                                "${transcriptionText.take(100)}..."
-                            } else {
-                                transcriptionText
-                            }
-                            showToast("Transcription: $displayText")
+                            // Show subtitle overlay with transcription text
+                            showSubtitleOverlay(transcriptionText)
                             RecorderLogger.d(TAG, "Transcription successful: $transcriptionText")
                         },
                         onFailure = { error ->
-                            // Show error toast
+                            // Show error as toast (errors don't need subtitle overlay)
                             showToast("Transcription failed: ${error.localizedMessage}")
                             RecorderLogger.e(TAG, "Transcription failed", error)
                         }
@@ -98,9 +95,27 @@ class TranscriptionManager(
     }
     
     /**
-     * Show a toast message
+     * Show a toast message for errors
      */
     private fun showToast(message: String) {
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
+    
+    /**
+     * Show subtitle overlay with transcription text
+     */
+    private fun showSubtitleOverlay(text: String) {
+        // Start subtitle overlay service if not running
+        val intent = Intent(context, SubtitleOverlayService::class.java).apply {
+            action = SubtitleOverlayService.ACTION_SHOW_SUBTITLE
+            putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, text)
+        }
+        context.startService(intent)
+        
+        // Also send broadcast for already running service
+        val broadcastIntent = Intent(SubtitleOverlayService.ACTION_SHOW_SUBTITLE).apply {
+            putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, text)
+        }
+        context.sendBroadcast(broadcastIntent)
     }
 }

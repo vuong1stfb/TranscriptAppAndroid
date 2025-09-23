@@ -45,6 +45,9 @@
         <service
             android:name=".overlay.OverlayService"
             android:exported="false" />
+        <service
+            android:name=".overlay.SubtitleOverlayService"
+            android:exported="false" />
     </application>
 
 </manifest>
