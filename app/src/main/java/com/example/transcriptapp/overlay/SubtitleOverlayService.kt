@@ -131,6 +131,12 @@ class SubtitleOverlayService : android.app.Service() {
 
     private fun showSubtitle(text: String) {
         RecorderLogger.d(TAG, "Showing subtitle: $text")
+        
+        // TODO: Future Google Translate integration
+        // Add translation logic here before displaying:
+        // val translatedText = GoogleTranslateService.translate(text, targetLanguage)
+        // val displayText = translatedText ?: text
+        
         subtitleTextView?.apply {
             this.text = text
             visibility = View.VISIBLE

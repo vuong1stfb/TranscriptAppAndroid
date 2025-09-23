@@ -103,18 +103,26 @@ class TranscriptionManager(
     
     /**
      * Show subtitle overlay with transcription text
+     * This method is designed to be easily extended for Google Translate integration
+     * Future enhancement: Add translation service call before displaying text
      */
     private fun showSubtitleOverlay(text: String) {
+        // TODO: Future Google Translate integration point
+        // val translatedText = translateService.translate(text, targetLanguage)
+        // val displayText = translatedText ?: text
+        
+        val displayText = text
+        
         // Start subtitle overlay service if not running
         val intent = Intent(context, SubtitleOverlayService::class.java).apply {
             action = SubtitleOverlayService.ACTION_SHOW_SUBTITLE
-            putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, text)
+            putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, displayText)
         }
         context.startService(intent)
         
         // Also send broadcast for already running service
         val broadcastIntent = Intent(SubtitleOverlayService.ACTION_SHOW_SUBTITLE).apply {
-            putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, text)
+            putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, displayText)
         }
         context.sendBroadcast(broadcastIntent)
     }
