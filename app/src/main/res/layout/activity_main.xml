@@ -25,6 +25,36 @@
         app:layout_constraintTop_toBottomOf="@+id/btnGrantOverlay"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/btnStartSubtitle" />
+
+    <Button
+        android:id="@+id/btnStartSubtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Kích hoạt Subtitle Overlay"
+        app:layout_constraintTop_toBottomOf="@+id/btnStartOverlay"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/btnTestTranslation" />
+
+    <Button
+        android:id="@+id/btnTestTranslation"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Test Translation"
+        app:layout_constraintTop_toBottomOf="@+id/btnStartSubtitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/btnHideSubtitle" />
+
+    <Button
+        android:id="@+id/btnHideSubtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Ẩn Subtitle"
+        app:layout_constraintTop_toBottomOf="@+id/btnTestTranslation"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/btnLogout" />
 
     <Button
