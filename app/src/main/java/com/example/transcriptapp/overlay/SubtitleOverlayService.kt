@@ -173,7 +173,9 @@ class SubtitleOverlayService : android.app.Service() {
                 }
                 MotionEvent.ACTION_MOVE -> {
                     params.x = initialX + (event.rawX - touchX).toInt()
-                    params.y = initialY + (event.rawY - touchY).toInt()
+                    // For BOTTOM gravity, Y coordinate is distance from bottom,
+                    // so we need to invert the Y movement to fix drag direction
+                    params.y = initialY - (event.rawY - touchY).toInt()
                     windowManager.updateViewLayout(overlayView, params)
                     true
                 }

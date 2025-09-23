@@ -25,36 +25,6 @@
         app:layout_constraintTop_toBottomOf="@+id/btnGrantOverlay"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@+id/btnSubtitleOverlay" />
-
-    <Button
-        android:id="@+id/btnSubtitleOverlay"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Kích hoạt Subtitle Overlay"
-        app:layout_constraintTop_toBottomOf="@+id/btnStartOverlay"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@+id/btnTestSubtitle" />
-
-    <Button
-        android:id="@+id/btnTestSubtitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Test Subtitle"
-        app:layout_constraintTop_toBottomOf="@+id/btnSubtitleOverlay"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@+id/btnHideSubtitle" />
-
-    <Button
-        android:id="@+id/btnHideSubtitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Ẩn Subtitle"
-        app:layout_constraintTop_toBottomOf="@+id/btnTestSubtitle"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/btnLogout" />
 
     <Button
@@ -65,6 +35,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/btnHideSubtitle" />
+        app:layout_constraintTop_toBottomOf="@+id/btnStartOverlay" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -34,9 +34,6 @@ class MainActivity : AppCompatActivity() {
 
         val btnGrantOverlay: Button = findViewById(R.id.btnGrantOverlay)
         val btnLogout: Button = findViewById(R.id.btnLogout)
-        val btnSubtitleOverlay: Button = findViewById(R.id.btnSubtitleOverlay)
-        val btnTestSubtitle: Button = findViewById(R.id.btnTestSubtitle)
-        val btnHideSubtitle: Button = findViewById(R.id.btnHideSubtitle)
 
         btnGrantOverlay.setOnClickListener {
             val intent = Intent(
@@ -45,27 +42,6 @@ class MainActivity : AppCompatActivity() {
             )
             startActivity(intent)
         }
-
-        btnSubtitleOverlay.setOnClickListener {
-            // Start subtitle overlay service
-            val intent = Intent(this, SubtitleOverlayService::class.java)
-            startService(intent)
-        }
-
-        btnTestSubtitle.setOnClickListener {
-            // Test subtitle with sample text
-            val intent = Intent(SubtitleOverlayService.ACTION_SHOW_SUBTITLE).apply {
-                putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, "Đây là subtitle mẫu để test tính năng hiển thị phụ đề overlay")
-            }
-            sendBroadcast(intent)
-        }
-
-        btnHideSubtitle.setOnClickListener {
-            // Hide subtitle
-            val intent = Intent(SubtitleOverlayService.ACTION_HIDE_SUBTITLE)
-            sendBroadcast(intent)
-        }
-
 
         btnLogout.setOnClickListener {
             // Xóa dữ liệu đăng nhập trong SharedPreferences
