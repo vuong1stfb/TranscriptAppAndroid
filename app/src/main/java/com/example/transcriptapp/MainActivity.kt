@@ -38,7 +38,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         val btnGrantOverlay: Button = findViewById(R.id.btnGrantOverlay)
-    val btnStartSubtitle: Button = findViewById(R.id.btnStartSubtitle)
         val btnHideSubtitle: Button = findViewById(R.id.btnHideSubtitle)
         val btnLogout: Button = findViewById(R.id.btnLogout)
 
@@ -48,10 +47,6 @@ class MainActivity : AppCompatActivity() {
                 Uri.parse("package:$packageName")
             )
             startActivity(intent)
-        }
-
-        btnStartSubtitle.setOnClickListener {
-            startService(Intent(this, SubtitleOverlayService::class.java))
         }
 
         // Removed test translation button
