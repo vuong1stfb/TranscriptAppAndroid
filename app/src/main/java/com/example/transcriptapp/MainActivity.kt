@@ -9,6 +9,11 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.example.transcriptapp.overlay.OverlayService
 import com.example.transcriptapp.overlay.SubtitleOverlayService
+import com.example.transcriptapp.service.translate.GoogleTranslateService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +38,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         val btnGrantOverlay: Button = findViewById(R.id.btnGrantOverlay)
+        val btnStartSubtitle: Button = findViewById(R.id.btnStartSubtitle)
+        val btnTestTranslation: Button = findViewById(R.id.btnTestTranslation)
+        val btnHideSubtitle: Button = findViewById(R.id.btnHideSubtitle)
         val btnLogout: Button = findViewById(R.id.btnLogout)
 
         btnGrantOverlay.setOnClickListener {
@@ -41,6 +49,19 @@ class MainActivity : AppCompatActivity() {
                 Uri.parse("package:$packageName")
             )
             startActivity(intent)
+        }
+
+        btnStartSubtitle.setOnClickListener {
+            startService(Intent(this, SubtitleOverlayService::class.java))
+        }
+
+        btnTestTranslation.setOnClickListener {
+            testTranslationFunction()
+        }
+
+        btnHideSubtitle.setOnClickListener {
+            val intent = Intent(SubtitleOverlayService.ACTION_HIDE_SUBTITLE)
+            sendBroadcast(intent)
         }
 
         btnLogout.setOnClickListener {
@@ -52,6 +73,30 @@ class MainActivity : AppCompatActivity() {
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
             finish()
+        }
+    }
+
+    private fun testTranslationFunction() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val translateService = GoogleTranslateService()
+            
+            // Test the example text from the problem statement
+            val testText = "You're receiving notifications because you modified the open/close state."
+            val translatedText = translateService.translateText(testText, "vi", "auto")
+            
+            withContext(Dispatchers.Main) {
+                // Show the result in subtitle overlay
+                val displayText = if (translatedText != null) {
+                    "Original: $testText\n\nTranslated: $translatedText"
+                } else {
+                    "Translation failed: $testText"
+                }
+                
+                val intent = Intent(SubtitleOverlayService.ACTION_SHOW_SUBTITLE).apply {
+                    putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, displayText)
+                }
+                sendBroadcast(intent)
+            }
         }
     }
 }

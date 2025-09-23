@@ -17,7 +17,12 @@ import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
 import com.example.transcriptapp.R
+import com.example.transcriptapp.service.translate.GoogleTranslateService
 import com.example.transcriptapp.utils.RecorderLogger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SubtitleOverlayService : android.app.Service() {
 
@@ -31,6 +36,7 @@ class SubtitleOverlayService : android.app.Service() {
     private lateinit var windowManager: WindowManager
     private var overlayView: View? = null
     private var subtitleTextView: TextView? = null
+    private val translateService: GoogleTranslateService = GoogleTranslateService()
 
     private val subtitleReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -132,14 +138,44 @@ class SubtitleOverlayService : android.app.Service() {
     private fun showSubtitle(text: String) {
         RecorderLogger.d(TAG, "Showing subtitle: $text")
         
-        // TODO: Future Google Translate integration
-        // Add translation logic here before displaying:
-        // val translatedText = GoogleTranslateService.translate(text, targetLanguage)
-        // val displayText = translatedText ?: text
-        
-        subtitleTextView?.apply {
-            this.text = text
-            visibility = View.VISIBLE
+        // Use coroutine to handle translation asynchronously
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Attempt to translate the text to Vietnamese
+                val translatedText = if (translateService.isTranslationNeeded(text)) {
+                    translateService.translateText(text, "vi", "auto")
+                } else {
+                    null
+                }
+                
+                // Use translated text if available, otherwise use original
+                val displayText = translatedText ?: text
+                
+                withContext(Dispatchers.Main) {
+                    subtitleTextView?.apply {
+                        this.text = displayText
+                        visibility = View.VISIBLE
+                    }
+                    
+                    // Log translation result
+                    if (translatedText != null) {
+                        RecorderLogger.d(TAG, "Subtitle text translated successfully")
+                    } else {
+                        RecorderLogger.d(TAG, "Using original subtitle text (translation not needed or failed)")
+                    }
+                }
+                
+            } catch (e: Exception) {
+                RecorderLogger.e(TAG, "Error during translation, using original text", e)
+                
+                withContext(Dispatchers.Main) {
+                    // Fallback to original text on error
+                    subtitleTextView?.apply {
+                        this.text = text
+                        visibility = View.VISIBLE
+                    }
+                }
+            }
         }
     }
 

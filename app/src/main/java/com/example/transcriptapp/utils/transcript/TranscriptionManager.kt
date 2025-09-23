@@ -10,6 +10,7 @@ import com.example.transcriptapp.repository.transcript.TranscriptRepository
 import com.example.transcriptapp.repository.transcript.TranscriptRepositoryImpl
 import com.example.transcriptapp.service.transcript.TranscriptService
 import com.example.transcriptapp.service.transcript.TranscriptServiceImpl
+import com.example.transcriptapp.service.translate.GoogleTranslateService
 import com.example.transcriptapp.utils.RecorderLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,7 @@ class TranscriptionManager(
     private val TAG = "TranscriptionManager"
     private val transcriptService: TranscriptService = TranscriptServiceImpl(authRepository)
     private val transcriptRepository: TranscriptRepository = TranscriptRepositoryImpl(transcriptService)
+    private val translateService: GoogleTranslateService = GoogleTranslateService()
     
     /**
      * Request transcription for a video file and show the result in a toast notification
@@ -103,27 +105,60 @@ class TranscriptionManager(
     
     /**
      * Show subtitle overlay with transcription text
-     * This method is designed to be easily extended for Google Translate integration
-     * Future enhancement: Add translation service call before displaying text
+     * Now includes Google Translate integration for Vietnamese translation
      */
     private fun showSubtitleOverlay(text: String) {
-        // TODO: Future Google Translate integration point
-        // val translatedText = translateService.translate(text, targetLanguage)
-        // val displayText = translatedText ?: text
-        
-        val displayText = text
-        
-        // Start subtitle overlay service if not running
-        val intent = Intent(context, SubtitleOverlayService::class.java).apply {
-            action = SubtitleOverlayService.ACTION_SHOW_SUBTITLE
-            putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, displayText)
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Attempt to translate the text to Vietnamese
+                val translatedText = if (translateService.isTranslationNeeded(text)) {
+                    translateService.translateText(text, "vi", "auto")
+                } else {
+                    null
+                }
+                
+                // Use translated text if available, otherwise use original
+                val displayText = translatedText ?: text
+                
+                withContext(Dispatchers.Main) {
+                    // Start subtitle overlay service if not running
+                    val intent = Intent(context, SubtitleOverlayService::class.java).apply {
+                        action = SubtitleOverlayService.ACTION_SHOW_SUBTITLE
+                        putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, displayText)
+                    }
+                    context.startService(intent)
+                    
+                    // Also send broadcast for already running service
+                    val broadcastIntent = Intent(SubtitleOverlayService.ACTION_SHOW_SUBTITLE).apply {
+                        putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, displayText)
+                    }
+                    context.sendBroadcast(broadcastIntent)
+                    
+                    // Log translation result
+                    if (translatedText != null) {
+                        RecorderLogger.d(TAG, "Text translated successfully for subtitle overlay")
+                    } else {
+                        RecorderLogger.d(TAG, "Using original text for subtitle overlay (translation not needed or failed)")
+                    }
+                }
+                
+            } catch (e: Exception) {
+                RecorderLogger.e(TAG, "Error during translation, using original text", e)
+                
+                withContext(Dispatchers.Main) {
+                    // Fallback to original text on error
+                    val intent = Intent(context, SubtitleOverlayService::class.java).apply {
+                        action = SubtitleOverlayService.ACTION_SHOW_SUBTITLE
+                        putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, text)
+                    }
+                    context.startService(intent)
+                    
+                    val broadcastIntent = Intent(SubtitleOverlayService.ACTION_SHOW_SUBTITLE).apply {
+                        putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, text)
+                    }
+                    context.sendBroadcast(broadcastIntent)
+                }
+            }
         }
-        context.startService(intent)
-        
-        // Also send broadcast for already running service
-        val broadcastIntent = Intent(SubtitleOverlayService.ACTION_SHOW_SUBTITLE).apply {
-            putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, displayText)
-        }
-        context.sendBroadcast(broadcastIntent)
     }
 }
