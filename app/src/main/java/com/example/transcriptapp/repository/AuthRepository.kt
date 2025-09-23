@@ -7,4 +7,5 @@ interface AuthRepository {
     fun logout()
     fun getCurrentUser(): User?
     fun isLoggedIn(): Boolean
+    fun getAccessToken(): String?
 }

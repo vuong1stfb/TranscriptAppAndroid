@@ -1,6 +1,7 @@
 package com.example.transcriptapp.service
 
 import com.example.transcriptapp.model.User
+import com.example.transcriptapp.utils.ApiConfig
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
@@ -11,7 +12,7 @@ class AuthServiceImpl : AuthService {
 
     init {
         val retrofit = Retrofit.Builder()
-            .baseUrl("https://my-project-8kfa.onrender.com")
+            .baseUrl(ApiConfig.BASE_URL)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         api = retrofit.create(AuthApi::class.java)
@@ -35,7 +36,7 @@ class AuthServiceImpl : AuthService {
 }
 
 interface AuthApi {
-    @POST("/api/auth/login")
+    @POST(ApiConfig.AUTH_LOGIN_ENDPOINT)
     suspend fun login(@Body request: LoginRequest): LoginResponse
 }
 

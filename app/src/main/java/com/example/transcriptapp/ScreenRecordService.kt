@@ -25,6 +25,9 @@ import java.io.File
 import com.example.transcriptapp.utils.ProjectionRecorder
 import com.example.transcriptapp.utils.MuxerCoordinator
 import com.example.transcriptapp.utils.RecorderLogger
+import com.example.transcriptapp.repository.AuthRepository
+import com.example.transcriptapp.repository.AuthRepositoryImpl
+import com.example.transcriptapp.utils.transcript.TranscriptionManager
 
 class ScreenRecordService : Service() {
 
@@ -61,6 +64,8 @@ class ScreenRecordService : Service() {
     private lateinit var mediaProjectionManager: MediaProjectionManager
     private lateinit var notificationManager: NotificationManager
     private lateinit var recordingFileManager: RecordingFileManager
+    private lateinit var transcriptionManager: TranscriptionManager
+    private lateinit var authRepository: AuthRepository
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -84,6 +89,13 @@ class ScreenRecordService : Service() {
         mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         recordingFileManager = RecordingFileManager(this)
+        
+        // Create AuthService first
+        val authService = com.example.transcriptapp.service.AuthServiceImpl()
+        // Then create AuthRepository with the service
+        authRepository = AuthRepositoryImpl(this, authService)
+        // Finally create TranscriptionManager
+        transcriptionManager = TranscriptionManager(this, authRepository)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -119,6 +131,15 @@ class ScreenRecordService : Service() {
                     outputFile = nextFile
                     if (previousFilePath != null) {
                         sendRecordingStoppedBroadcast(previousFilePath!!)
+                        
+                        // Request transcription for the completed segment
+                        val completedVideoFile = File(previousFilePath!!)
+                        if (completedVideoFile.exists() && completedVideoFile.length() > 0) {
+                            RecorderLogger.d("ScreenRecordService", "Requesting transcription for: ${completedVideoFile.name}")
+                            transcriptionManager.transcribeVideoAndNotify(completedVideoFile)
+                        } else {
+                            RecorderLogger.e("ScreenRecordService", "Cannot transcribe: Invalid video file")
+                        }
                     }
                 }
             }
@@ -351,6 +372,12 @@ class ScreenRecordService : Service() {
                 )
                 recordingFileManager.logMetadata(finalOutput, recordingDuration)
                 sendRecordingStoppedBroadcast(finalOutput.absolutePath)
+                
+                // Request transcription when a recording is stopped (and not part of a split-restart)
+                if (!restartAfterStop) {
+                    RecorderLogger.d("ScreenRecordService", "Requesting transcription for: ${finalOutput.name}")
+                    transcriptionManager.transcribeVideoAndNotify(finalOutput)
+                }
             } else {
                 RecorderLogger.e(
                     "ScreenRecordService",
