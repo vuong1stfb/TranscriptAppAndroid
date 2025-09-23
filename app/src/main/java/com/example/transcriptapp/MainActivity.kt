@@ -38,8 +38,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val btnGrantOverlay: Button = findViewById(R.id.btnGrantOverlay)
-        val btnStartSubtitle: Button = findViewById(R.id.btnStartSubtitle)
-        val btnTestTranslation: Button = findViewById(R.id.btnTestTranslation)
+    val btnStartSubtitle: Button = findViewById(R.id.btnStartSubtitle)
         val btnHideSubtitle: Button = findViewById(R.id.btnHideSubtitle)
         val btnLogout: Button = findViewById(R.id.btnLogout)
 
@@ -55,9 +54,7 @@ class MainActivity : AppCompatActivity() {
             startService(Intent(this, SubtitleOverlayService::class.java))
         }
 
-        btnTestTranslation.setOnClickListener {
-            testTranslationFunction()
-        }
+        // Removed test translation button
 
         btnHideSubtitle.setOnClickListener {
             val intent = Intent(SubtitleOverlayService.ACTION_HIDE_SUBTITLE)
@@ -76,27 +73,5 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun testTranslationFunction() {
-        CoroutineScope(Dispatchers.IO).launch {
-            val translateService = GoogleTranslateService()
-            
-            // Test the example text from the problem statement
-            val testText = "You're receiving notifications because you modified the open/close state."
-            val translatedText = translateService.translateText(testText, "vi", "auto")
-            
-            withContext(Dispatchers.Main) {
-                // Show the result in subtitle overlay
-                val displayText = if (translatedText != null) {
-                    "Original: $testText\n\nTranslated: $translatedText"
-                } else {
-                    "Translation failed: $testText"
-                }
-                
-                val intent = Intent(SubtitleOverlayService.ACTION_SHOW_SUBTITLE).apply {
-                    putExtra(SubtitleOverlayService.EXTRA_SUBTITLE_TEXT, displayText)
-                }
-                sendBroadcast(intent)
-            }
-        }
-    }
+    // Test translation function removed per request
 }

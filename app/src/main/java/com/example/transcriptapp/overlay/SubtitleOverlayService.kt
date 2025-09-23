@@ -226,7 +226,12 @@ class SubtitleOverlayService : android.app.Service() {
                 addAction(ACTION_SHOW_SUBTITLE)
                 addAction(ACTION_HIDE_SUBTITLE)
             }
-            registerReceiver(subtitleReceiver, filter)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(subtitleReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                @Suppress("DEPRECATION")
+                registerReceiver(subtitleReceiver, filter)
+            }
             RecorderLogger.d(TAG, "Subtitle receiver registered")
         } catch (t: Throwable) {
             RecorderLogger.e(TAG, "Failed to register subtitle receiver", t)
