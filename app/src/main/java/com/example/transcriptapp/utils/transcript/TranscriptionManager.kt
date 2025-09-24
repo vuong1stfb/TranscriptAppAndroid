@@ -71,7 +71,7 @@ class TranscriptionManager(
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val result = transcriptRepository.transcribeVideo(videoFile, request)
-                
+
                 withContext(Dispatchers.Main) {
                     result.fold(
                         onSuccess = { transcriptionText ->
@@ -86,12 +86,23 @@ class TranscriptionManager(
                         }
                     )
                 }
+
             } catch (e: Exception) {
                 // Handle any unexpected errors
                 withContext(Dispatchers.Main) {
                     showToast("Error during transcription: ${e.localizedMessage}")
                 }
                 RecorderLogger.e(TAG, "Exception during transcription process", e)
+            } finally {
+                // Delete the temporary video file after attempting transcription to avoid storing segments locally
+                try {
+                    if (videoFile.exists()) {
+                        val deleted = videoFile.delete()
+                        RecorderLogger.d(TAG, "Temporary recording file deletion attempted: ${videoFile.absolutePath}, deleted=$deleted")
+                    }
+                } catch (t: Throwable) {
+                    RecorderLogger.e(TAG, "Failed to delete temporary recording file: ${videoFile.absolutePath}", t)
+                }
             }
         }
     }

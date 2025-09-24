@@ -15,7 +15,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@+id/btnStartSubtitle" />
+        app:layout_constraintBottom_toTopOf="@+id/btnGrantOverlay" />
 
     <Button
         android:id="@+id/btnGrantOverlay"
@@ -26,6 +26,20 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/btnHideSubtitle" />
+
+    <EditText
+        android:id="@+id/etSplitSeconds"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:inputType="number"
+        android:hint="Auto-split (giây)"
+        app:layout_constraintTop_toBottomOf="@+id/btnGrantOverlay"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/btnHideSubtitle" />
+
+
+
 
     <Button
         android:id="@+id/btnHideSubtitle"
@@ -45,6 +59,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/btnStartOverlay" />
+        app:layout_constraintTop_toBottomOf="@+id/btnHideSubtitle" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

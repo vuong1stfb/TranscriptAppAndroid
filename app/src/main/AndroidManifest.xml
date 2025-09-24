@@ -38,6 +38,10 @@
         <activity
             android:name=".overlay.CapturePermissionActivity"
             android:exported="false" />
+        <activity
+            android:name=".overlay.DialogSecondsActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog.Alert" />
         <service
             android:name=".ScreenRecordService"
             android:exported="false"

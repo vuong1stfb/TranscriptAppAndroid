@@ -14,6 +14,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.widget.EditText
+import android.text.Editable
+import android.text.TextWatcher
+import android.content.IntentFilter
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,8 +42,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         val btnGrantOverlay: Button = findViewById(R.id.btnGrantOverlay)
-        val btnHideSubtitle: Button = findViewById(R.id.btnHideSubtitle)
+    val etSplitSeconds: EditText = findViewById(R.id.etSplitSeconds)
+    val btnHideSubtitle: Button = findViewById(R.id.btnHideSubtitle)
         val btnLogout: Button = findViewById(R.id.btnLogout)
+    // etSplitSeconds will broadcast split-second changes automatically
 
         btnGrantOverlay.setOnClickListener {
             val intent = Intent(
@@ -55,6 +61,30 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(SubtitleOverlayService.ACTION_HIDE_SUBTITLE)
             sendBroadcast(intent)
         }
+
+        // When the user types a number, broadcast it to the overlay service
+        etSplitSeconds.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val secs = s?.toString()?.toIntOrNull() ?: 0
+                // Start OverlayService with the seconds in the intent to ensure the service receives the update
+                val svcIntent = Intent(this@MainActivity, com.example.transcriptapp.overlay.OverlayService::class.java).apply {
+                    action = com.example.transcriptapp.overlay.DialogSecondsActivity.ACTION_SET_SPLIT_SECONDS
+                    putExtra(com.example.transcriptapp.overlay.DialogSecondsActivity.EXTRA_SECONDS, secs)
+                }
+                startService(svcIntent)
+                com.example.transcriptapp.utils.RecorderLogger.d("MainActivity", "Sent service intent ACTION_SET_SPLIT_SECONDS secs=$secs")
+                // also send a broadcast for any receivers
+                val bcast = Intent(com.example.transcriptapp.overlay.DialogSecondsActivity.ACTION_SET_SPLIT_SECONDS).apply {
+                    putExtra(com.example.transcriptapp.overlay.DialogSecondsActivity.EXTRA_SECONDS, secs)
+                }
+                sendBroadcast(bcast)
+                com.example.transcriptapp.utils.RecorderLogger.d("MainActivity", "Sent broadcast ACTION_SET_SPLIT_SECONDS secs=$secs")
+            }
+        })
+
+
 
         btnLogout.setOnClickListener {
             // Xóa dữ liệu đăng nhập trong SharedPreferences

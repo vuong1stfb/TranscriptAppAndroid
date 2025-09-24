@@ -50,10 +50,16 @@ class GoogleTranslateService {
         }
         
         try {
+            // If sourceLanguage is auto and text looks like Japanese, force source to 'ja'
+            val resolvedSource = if (sourceLanguage == DEFAULT_SOURCE_LANGUAGE && containsJapanese(text)) {
+                RecorderLogger.d(TAG, "Detected Japanese characters in input, forcing sourceLanguage=ja")
+                "ja"
+            } else sourceLanguage
+
             val encodedText = URLEncoder.encode(text, "UTF-8")
-            val url = "$BASE_URL?client=gtx&dt=t&dj=1&sl=$sourceLanguage&tl=$targetLanguage&q=$encodedText"
-            
-            RecorderLogger.d(TAG, "Translating text from '$sourceLanguage' to '$targetLanguage': ${text.take(50)}...")
+            val url = "$BASE_URL?client=gtx&dt=t&dj=1&sl=$resolvedSource&tl=$targetLanguage&q=$encodedText"
+
+            RecorderLogger.d(TAG, "Translating text from '$resolvedSource' to '$targetLanguage': ${text.take(50)}...")
             
             val request = Request.Builder()
                 .url(url)
@@ -105,10 +111,33 @@ class GoogleTranslateService {
         // Simple heuristic: if text contains mostly Latin characters, likely needs translation to Vietnamese
         // This is not perfect but works for basic cases
         if (targetLanguage == "vi") {
+            // If input contains Japanese characters, definitely translate
+            if (containsJapanese(text)) return true
+
             val latinChars = text.count { it.isLetter() && it.code < 256 }
             val totalChars = text.count { it.isLetter() }
             return totalChars > 0 && (latinChars.toDouble() / totalChars) > 0.7
         }
         return true // Default to translate if we can't determine
+    }
+
+    /**
+     * Detect if text contains Japanese characters (Hiragana, Katakana, Kanji ranges)
+     */
+    private fun containsJapanese(text: String): Boolean {
+        for (ch in text) {
+            val code = ch.code
+            // Hiragana
+            if (code in 0x3040..0x309F) return true
+            // Katakana
+            if (code in 0x30A0..0x30FF) return true
+            // Katakana Phonetic Extensions
+            if (code in 0x31F0..0x31FF) return true
+            // CJK Unified Ideographs (common Kanji range)
+            if (code in 0x4E00..0x9FFF) return true
+            // Halfwidth Katakana
+            if (code in 0xFF66..0xFF9F) return true
+        }
+        return false
     }
 }
