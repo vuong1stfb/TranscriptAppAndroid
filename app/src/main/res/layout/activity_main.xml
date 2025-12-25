@@ -27,20 +27,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/btnHideSubtitle" />
 
-    <EditText
-        android:id="@+id/etSplitSeconds"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:inputType="number"
-        android:hint="Auto-split (giây)"
-        app:layout_constraintTop_toBottomOf="@+id/btnGrantOverlay"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@+id/btnHideSubtitle" />
-
-
-
-
     <Button
         android:id="@+id/btnHideSubtitle"
         android:layout_width="wrap_content"

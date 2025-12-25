@@ -1,26 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
+    android:id="@+id/transcriptRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@android:color/transparent"
-    android:padding="4dp">
+    android:padding="2dp"
+    android:elevation="4dp">
 
-    <TextView
-        android:id="@+id/tvSubtitle"
-        android:layout_width="wrap_content"
+    <View
+        android:id="@+id/dragHandle"
+        android:layout_width="14dp"
+        android:layout_height="14dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="2dp"
+        android:background="@drawable/drag_handle_dot" />
+
+    <ScrollView
+        android:id="@+id/scrollTranscript"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingBottom="6dp"
+        android:clipToPadding="false"
+        android:overScrollMode="never">
+
+        <LinearLayout
+            android:id="@+id/segmentsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="2dp" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:maxWidth="220dp"
-        android:minWidth="100dp"
-        android:background="#80FFFFFF"
-        android:padding="6dp"
-        android:text="Subtitle text will appear here..."
-        android:textColor="@android:color/black"
-        android:textSize="12sp"
-        android:textStyle="normal"
-        android:lineSpacingExtra="1dp"
-        android:gravity="start"
-        android:elevation="6dp"
-        android:visibility="gone" />
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:paddingTop="1dp">
+
+        <View
+            android:id="@+id/resizeHandle"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginEnd="2dp"
+            android:layout_marginBottom="2dp"
+            android:layout_marginTop="2dp"
+            android:background="@drawable/resize_handle_dot" />
+    </LinearLayout>
 
 </LinearLayout>

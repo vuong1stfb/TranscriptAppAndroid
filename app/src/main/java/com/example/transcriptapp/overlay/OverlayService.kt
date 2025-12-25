@@ -14,13 +14,14 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
-import android.widget.TextView
-import android.widget.LinearLayout
+import android.widget.ImageButton
+import android.widget.Spinner
 import android.widget.Toast
-import android.text.InputType
+import java.util.Locale
 import android.view.inputmethod.InputMethodManager
 import com.example.transcriptapp.ScreenRecordService
 import com.example.transcriptapp.R
@@ -32,6 +33,7 @@ class OverlayService : android.app.Service() {
 	private var overlayView: View? = null
 	// Keep a reference to the LayoutParams so we can update flags at runtime
 	private var overlayParams: WindowManager.LayoutParams? = null
+	private var overlayVisible = false
 
 	private val stateReceiver = object : BroadcastReceiver() {
 		override fun onReceive(context: Context, intent: Intent) {
@@ -40,24 +42,8 @@ class OverlayService : android.app.Service() {
 				val state = intent.getStringExtra(ScreenRecordService.EXTRA_STATE) ?: return
 				updateButtonsForState(state)
 			}
-			// handle dialog result for split seconds
-			if (intent.action == DialogSecondsActivity.ACTION_SET_SPLIT_SECONDS) {
-				val secs = intent.getIntExtra(DialogSecondsActivity.EXTRA_SECONDS, 0)
-				RecorderLogger.d("OverlayService", "Received ACTION_SET_SPLIT_SECONDS: $secs")
-				// update configured seconds and enable/disable auto-split depending on value
-				autoSplitSeconds = secs
-				autoSplitEnabled = secs > 0
-				if (autoSplitEnabled) startAutoSplitIfNeeded(secs.toString()) else stopAutoSplit()
-			}
-			// ACTION_SET_AUTO_SPLIT handling removed - activity no longer broadcasts auto-split toggle
 		}
 	}
-
-	// Auto-split scheduler
-	private var autoSplitEnabled = false
-	private var autoSplitSeconds = 0
-	private var scheduler: java.util.concurrent.ScheduledExecutorService? = null
-	private var scheduledFuture: java.util.concurrent.ScheduledFuture<*>? = null
 
 	override fun onCreate() {
 		super.onCreate()
@@ -68,17 +54,6 @@ class OverlayService : android.app.Service() {
 
 	override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 		// Process incoming intent updates (e.g., seconds update) and keep service alive
-		try {
-			if (intent?.action == DialogSecondsActivity.ACTION_SET_SPLIT_SECONDS) {
-				val secs = intent.getIntExtra(DialogSecondsActivity.EXTRA_SECONDS, 0)
-				RecorderLogger.d("OverlayService", "onStartCommand received ACTION_SET_SPLIT_SECONDS: $secs")
-				autoSplitSeconds = secs
-				autoSplitEnabled = secs > 0
-				if (autoSplitEnabled) startAutoSplitIfNeeded(secs.toString()) else stopAutoSplit()
-			}
-		} catch (t: Throwable) {
-			RecorderLogger.e("OverlayService", "onStartCommand failed to process intent", t)
-		}
 		return START_STICKY
 	}
 
@@ -101,10 +76,12 @@ class OverlayService : android.app.Service() {
 			return
 		}
 
-		if (overlayView != null) return
+		if (overlayView != null && overlayVisible) return
 
 		val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
-		overlayView = inflater.inflate(R.layout.overlay_controls, null)
+		if (overlayView == null) {
+			overlayView = inflater.inflate(R.layout.overlay_controls, null)
+		}
 
 		val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 			WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -117,7 +94,9 @@ class OverlayService : android.app.Service() {
 			WindowManager.LayoutParams.WRAP_CONTENT,
 			WindowManager.LayoutParams.WRAP_CONTENT,
 			type,
-			WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+			WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+				WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+				WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
 			PixelFormat.TRANSLUCENT
 		).apply {
 			gravity = Gravity.TOP or Gravity.START
@@ -133,6 +112,7 @@ class OverlayService : android.app.Service() {
 
 		try {
 			windowManager.addView(overlayView, params)
+			overlayVisible = true
 		} catch (t: Throwable) {
 			RecorderLogger.e("OverlayService", "Failed to add overlay view", t)
 			stopSelf()
@@ -144,9 +124,11 @@ class OverlayService : android.app.Service() {
 
 	private fun hideOverlay() {
 		try {
-			overlayView?.let { windowManager.removeView(it) }
+			if (overlayVisible) {
+				overlayView?.let { windowManager.removeView(it) }
+				overlayVisible = false
+			}
 		} catch (_: Throwable) {}
-		overlayView = null
 	}
 
 	private fun setupDrag(view: View, params: WindowManager.LayoutParams) {
@@ -176,12 +158,22 @@ class OverlayService : android.app.Service() {
 
 	private fun setupButtons(root: View) {
 		val btnRecord = root.findViewById<android.widget.Button>(R.id.btnRecord)
-		val btnPause = root.findViewById<android.widget.Button>(R.id.btnPause)
-		val btnResume = root.findViewById<android.widget.Button>(R.id.btnResume)
-		val btnSplit = root.findViewById<android.widget.Button>(R.id.btnSplit)
 		val btnStop = root.findViewById<android.widget.Button>(R.id.btnStop)
+		val btnCloseOptions = root.findViewById<ImageButton>(R.id.btnCloseOptions)
+		val spnLanguage = root.findViewById<Spinner>(R.id.spnLanguage)
+		val etChunkMs = root.findViewById<EditText>(R.id.etChunkMs)
+		val spnSampleRate = root.findViewById<Spinner>(R.id.spnSampleRate)
+		val chkShowOriginal = root.findViewById<CheckBox>(R.id.chkShowOriginal)
+		val chkShowTranslation = root.findViewById<CheckBox>(R.id.chkShowTranslation)
+		val chkTranslatePartial = root.findViewById<CheckBox>(R.id.chkTranslatePartial)
+		val chkManualCommit = root.findViewById<CheckBox>(R.id.chkManualCommit)
+		val vadRow = root.findViewById<android.widget.LinearLayout>(R.id.vadRow)
+		val etVadThreshold = root.findViewById<EditText>(R.id.etVadThreshold)
+		val etMinSpeechMs = root.findViewById<EditText>(R.id.etMinSpeechMs)
+		val etMinSilenceMs = root.findViewById<EditText>(R.id.etMinSilenceMs)
+		val etVadSilenceSecs = root.findViewById<EditText>(R.id.etVadSilenceSecs)
 
-	// Auto-split UI removed from overlay; we only track autoSplitSeconds in service state
+		// Auto-split UI removed from overlay
 
 		// NOTE: keyboard control centralized via controlKeyboard(show, target)
 
@@ -191,18 +183,6 @@ class OverlayService : android.app.Service() {
 				addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 			}
 			startActivity(intent)
-		}
-		btnPause.setOnClickListener {
-			RecorderLogger.d("OverlayService", "btnPause clicked")
-			startService(Intent(this, ScreenRecordService::class.java).apply { action = ScreenRecordService.ACTION_PAUSE })
-		}
-		btnResume.setOnClickListener {
-			RecorderLogger.d("OverlayService", "btnResume clicked")
-			startService(Intent(this, ScreenRecordService::class.java).apply { action = ScreenRecordService.ACTION_RESUME })
-		}
-		btnSplit.setOnClickListener {
-			RecorderLogger.d("OverlayService", "btnSplit clicked")
-			startService(Intent(this, ScreenRecordService::class.java).apply { action = ScreenRecordService.ACTION_SPLIT })
 		}
 		btnStop.setOnClickListener {
 			RecorderLogger.d("OverlayService", "btnStop clicked: hiding IME and restoring overlay flags")
@@ -216,23 +196,163 @@ class OverlayService : android.app.Service() {
 			startService(Intent(this, ScreenRecordService::class.java).apply { action = ScreenRecordService.ACTION_STOP })
 			stopSelf()
 		}
+		btnCloseOptions.setOnClickListener {
+			RecorderLogger.d("OverlayService", "Close options clicked")
+			hideOverlay()
+			stopSelf()
+		}
 
-		// No auto-split UI in overlay; autoSplitSeconds managed by service state and broadcasts
+		// Options + VAD settings
+		val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+		val showOriginal = prefs.getBoolean(SubtitleOverlayService.EXTRA_SHOW_ORIGINAL, true)
+		val showTranslation = prefs.getBoolean(SubtitleOverlayService.EXTRA_SHOW_TRANSLATION, true)
+		val translatePartial = prefs.getBoolean(SubtitleOverlayService.EXTRA_TRANSLATE_PARTIAL, false)
+		val commitStrategy = prefs.getString(KEY_COMMIT_STRATEGY, DEFAULT_COMMIT_STRATEGY) ?: DEFAULT_COMMIT_STRATEGY
+		val manualCommit = commitStrategy == "manual"
+		val languageCode = prefs.getString(KEY_LANGUAGE_CODE, "") ?: ""
+		val chunkMs = prefs.getInt(KEY_CHUNK_MS, DEFAULT_CHUNK_MS)
+		val sampleRate = prefs.getInt(KEY_SAMPLE_RATE, DEFAULT_SAMPLE_RATE)
+		val vadThreshold = prefs.getFloat(KEY_VAD_THRESHOLD, DEFAULT_VAD_THRESHOLD)
+		val minSpeechMs = prefs.getInt(KEY_MIN_SPEECH_MS, DEFAULT_MIN_SPEECH_MS)
+		val minSilenceMs = prefs.getInt(KEY_MIN_SILENCE_MS, DEFAULT_MIN_SILENCE_MS)
+		val vadSilenceSecs = prefs.getFloat(KEY_VAD_SILENCE_SECS, DEFAULT_VAD_SILENCE_SECS)
+
+		chkShowOriginal.isChecked = showOriginal
+		chkShowTranslation.isChecked = showTranslation
+		chkTranslatePartial.isChecked = translatePartial
+		chkManualCommit.isChecked = manualCommit
+		etChunkMs.setText(chunkMs.toString())
+
+		broadcastOptions(showOriginal, showTranslation, translatePartial)
+
+		vadRow.visibility = if (manualCommit) View.GONE else View.VISIBLE
+
+		val languageOptions = listOf(
+			"" to "None",
+			"vi" to "VI",
+			"en" to "EN",
+			"ko" to "KO",
+			"ja" to "JA",
+			"zh" to "ZH"
+		)
+		val adapter = ArrayAdapter(
+			root.context,
+			R.layout.spinner_item,
+			languageOptions.map { it.second }
+		).apply {
+			setDropDownViewResource(R.layout.spinner_dropdown_item)
+		}
+		spnLanguage.adapter = adapter
+		val selectedIndex = languageOptions.indexOfFirst { it.first == languageCode }.takeIf { it >= 0 } ?: 0
+		spnLanguage.setSelection(selectedIndex, false)
+		RecorderLogger.d("OverlayService", "language_code current=$languageCode")
+		spnLanguage.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+			override fun onItemSelected(
+				parent: android.widget.AdapterView<*>,
+				view: android.view.View?,
+				position: Int,
+				id: Long
+			) {
+				val code = languageOptions.getOrNull(position)?.first ?: ""
+				prefs.edit().putString(KEY_LANGUAGE_CODE, code).apply()
+				RecorderLogger.d("OverlayService", "language_code=$code (apply on next start)")
+			}
+
+			override fun onNothingSelected(parent: android.widget.AdapterView<*>) = Unit
+		}
+
+		setupVadEdit(etChunkMs) {
+			val value = parseInt(it, DEFAULT_CHUNK_MS).coerceIn(200, 10000)
+			prefs.edit().putInt(KEY_CHUNK_MS, value).apply()
+			etChunkMs.setText(value.toString())
+			RecorderLogger.d("OverlayService", "chunk_ms=$value (apply on next start)")
+		}
+
+		val sampleRateOptions = listOf(16000, 24000, 48000)
+		val sampleAdapter = ArrayAdapter(
+			root.context,
+			R.layout.spinner_item,
+			sampleRateOptions.map { "pcm_$it" }
+		).apply {
+			setDropDownViewResource(R.layout.spinner_dropdown_item)
+		}
+		spnSampleRate.adapter = sampleAdapter
+		val sampleIndex = sampleRateOptions.indexOf(sampleRate).takeIf { it >= 0 } ?: sampleRateOptions.size - 1
+		spnSampleRate.setSelection(sampleIndex, false)
+		spnSampleRate.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+			override fun onItemSelected(
+				parent: android.widget.AdapterView<*>,
+				view: android.view.View?,
+				position: Int,
+				id: Long
+			) {
+				val rate = sampleRateOptions.getOrNull(position) ?: DEFAULT_SAMPLE_RATE
+				prefs.edit().putInt(KEY_SAMPLE_RATE, rate).apply()
+				RecorderLogger.d("OverlayService", "sample_rate=$rate (apply on next start)")
+			}
+
+			override fun onNothingSelected(parent: android.widget.AdapterView<*>) = Unit
+		}
+
+		etVadThreshold.setText(String.format(Locale.US, "%.2f", vadThreshold))
+		etMinSpeechMs.setText(minSpeechMs.toString())
+		etMinSilenceMs.setText(minSilenceMs.toString())
+		etVadSilenceSecs.setText(String.format(Locale.US, "%.2f", vadSilenceSecs))
+
+		chkShowOriginal.setOnCheckedChangeListener { _, checked ->
+			prefs.edit().putBoolean(SubtitleOverlayService.EXTRA_SHOW_ORIGINAL, checked).apply()
+			broadcastOptions(checked, chkShowTranslation.isChecked, chkTranslatePartial.isChecked)
+		}
+		chkShowTranslation.setOnCheckedChangeListener { _, checked ->
+			prefs.edit().putBoolean(SubtitleOverlayService.EXTRA_SHOW_TRANSLATION, checked).apply()
+			broadcastOptions(chkShowOriginal.isChecked, checked, chkTranslatePartial.isChecked)
+		}
+		chkTranslatePartial.setOnCheckedChangeListener { _, checked ->
+			prefs.edit().putBoolean(SubtitleOverlayService.EXTRA_TRANSLATE_PARTIAL, checked).apply()
+			broadcastOptions(chkShowOriginal.isChecked, chkShowTranslation.isChecked, checked)
+		}
+		chkManualCommit.setOnCheckedChangeListener { _, checked ->
+			val nextStrategy = if (checked) "manual" else "vad"
+			prefs.edit().putString(KEY_COMMIT_STRATEGY, nextStrategy).apply()
+			vadRow.visibility = if (checked) View.GONE else View.VISIBLE
+			RecorderLogger.d("OverlayService", "commit_strategy=$nextStrategy (apply on next start)")
+		}
+
+		setupVadEdit(etVadThreshold) {
+			val value = parseFloat(it, DEFAULT_VAD_THRESHOLD).coerceIn(0.0f, 1.0f)
+			prefs.edit().putFloat(KEY_VAD_THRESHOLD, value).apply()
+			etVadThreshold.setText(String.format(Locale.US, "%.2f", value))
+			broadcastVadUpdated()
+		}
+		setupVadEdit(etVadSilenceSecs) {
+			val value = parseFloat(it, DEFAULT_VAD_SILENCE_SECS).coerceIn(0.05f, 2.0f)
+			prefs.edit().putFloat(KEY_VAD_SILENCE_SECS, value).apply()
+			etVadSilenceSecs.setText(String.format(Locale.US, "%.2f", value))
+			broadcastVadUpdated()
+		}
+		setupVadEdit(etMinSpeechMs) {
+			val value = parseInt(it, DEFAULT_MIN_SPEECH_MS).coerceIn(20, 2000)
+			prefs.edit().putInt(KEY_MIN_SPEECH_MS, value).apply()
+			etMinSpeechMs.setText(value.toString())
+			broadcastVadUpdated()
+		}
+		setupVadEdit(etMinSilenceMs) {
+			val value = parseInt(it, DEFAULT_MIN_SILENCE_MS).coerceIn(20, 5000)
+			prefs.edit().putInt(KEY_MIN_SILENCE_MS, value).apply()
+			etMinSilenceMs.setText(value.toString())
+			broadcastVadUpdated()
+		}
 	}
 
 	private fun updateButtonsForState(state: String) {
 		val root = overlayView ?: return
 		val btnRecord = root.findViewById<Button>(R.id.btnRecord)
-		val btnPause = root.findViewById<Button>(R.id.btnPause)
-		val btnResume = root.findViewById<Button>(R.id.btnResume)
-		val btnSplit = root.findViewById<Button>(R.id.btnSplit)
 		val btnStop = root.findViewById<Button>(R.id.btnStop)
 		val tvState = root.findViewById<android.widget.TextView>(R.id.tvState)
 
 		// Cập nhật text trạng thái
 		tvState.text = when (state) {
 			"recording" -> "State: Recording"
-			"paused" -> "State: Paused"
 			else -> "State: Stopped"
 		}
 
@@ -245,48 +365,13 @@ class OverlayService : android.app.Service() {
 		}
 
 		setButtonState(btnRecord, state == "stopped", android.graphics.Color.parseColor("#388E3C")) // holo_green_dark
-		setButtonState(btnPause, state == "recording", android.graphics.Color.parseColor("#F57C00")) // holo_orange_dark
-		setButtonState(btnResume, state == "paused", android.graphics.Color.parseColor("#1976D2")) // holo_blue_dark
-		setButtonState(btnSplit, state == "recording", android.graphics.Color.parseColor("#8E24AA")) // holo_purple
-		setButtonState(btnStop, state == "recording" || state == "paused", android.graphics.Color.parseColor("#D32F2F")) // holo_red_dark
+		setButtonState(btnStop, state == "recording", android.graphics.Color.parseColor("#D32F2F")) // holo_red_dark
 
-		// Start or stop auto-split based on recording state
-		if (state == "recording" && autoSplitEnabled) {
-			// only start auto-split if a positive seconds value is configured
-			startAutoSplitIfNeeded(autoSplitSeconds.toString())
+		if (state == "recording") {
+			hideOverlay()
 		} else {
-			stopAutoSplit()
+			showOverlay()
 		}
-	}
-
-	private fun startAutoSplitIfNeeded(secondsText: String?) {
-		val secs = secondsText?.toIntOrNull() ?: autoSplitSeconds
-		RecorderLogger.d("OverlayService", "startAutoSplitIfNeeded called with secondsText='$secondsText' resolved secs=$secs autoSplitEnabled=$autoSplitEnabled")
-		if (secs <= 0) {
-			RecorderLogger.d("OverlayService", "startAutoSplitIfNeeded: secs <= 0, will not schedule auto-split")
-			return
-		}
-		autoSplitSeconds = secs
-		if (scheduler == null) scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
-		scheduledFuture?.cancel(false)
-		// scheduleAtFixedRate will run every `secs` seconds and send ACTION_SPLIT
-		scheduledFuture = scheduler?.scheduleAtFixedRate({
-			try {
-				val intent = Intent(this, ScreenRecordService::class.java).apply { action = ScreenRecordService.ACTION_SPLIT }
-				startService(intent)
-				RecorderLogger.d("OverlayService", "Auto-split triggered")
-			} catch (t: Throwable) {
-				RecorderLogger.e("OverlayService", "Auto-split failed to send split", t)
-			}
-		}, secs.toLong(), secs.toLong(), java.util.concurrent.TimeUnit.SECONDS)
-		RecorderLogger.d("OverlayService", "Scheduled auto-split every ${secs}s")
-	}
-
-	private fun stopAutoSplit() {
-		scheduledFuture?.cancel(false)
-		scheduledFuture = null
-		try { scheduler?.shutdownNow() } catch (_: Throwable) {}
-		scheduler = null
 	}
 
 	// Temporarily make the overlay focusable so EditText can receive IME input
@@ -382,7 +467,6 @@ class OverlayService : android.app.Service() {
 	private fun registerReceiverSafe() {
 		val filter = IntentFilter().apply {
 			addAction(ScreenRecordService.BROADCAST_STATE)
-			addAction(DialogSecondsActivity.ACTION_SET_SPLIT_SECONDS)
 		}
 		try {
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -401,5 +485,65 @@ class OverlayService : android.app.Service() {
 			unregisterReceiver(stateReceiver)
 		} catch (_: Throwable) {}
 	}
-}
 
+	private fun setupVadEdit(editText: EditText, onCommit: (String) -> Unit) {
+		editText.setOnClickListener {
+			controlKeyboard(true, editText)
+		}
+		editText.setOnFocusChangeListener { _, hasFocus ->
+			if (hasFocus) {
+				controlKeyboard(true, editText)
+			} else {
+				controlKeyboard(false, editText)
+				onCommit(editText.text?.toString() ?: "")
+			}
+		}
+	}
+
+	private fun parseFloat(value: String, fallback: Float): Float {
+		return value.toFloatOrNull() ?: fallback
+	}
+
+	private fun parseInt(value: String, fallback: Int): Int {
+		return value.toIntOrNull() ?: fallback
+	}
+
+	private fun broadcastOptions(showOriginal: Boolean, showTranslation: Boolean, translatePartial: Boolean) {
+		val intent = Intent(SubtitleOverlayService.ACTION_UPDATE_OPTIONS).apply {
+			putExtra(SubtitleOverlayService.EXTRA_SHOW_ORIGINAL, showOriginal)
+			putExtra(SubtitleOverlayService.EXTRA_SHOW_TRANSLATION, showTranslation)
+			putExtra(SubtitleOverlayService.EXTRA_TRANSLATE_PARTIAL, translatePartial)
+		}
+		sendBroadcast(intent)
+		startService(Intent(this, SubtitleOverlayService::class.java).apply {
+			action = SubtitleOverlayService.ACTION_UPDATE_OPTIONS
+			putExtra(SubtitleOverlayService.EXTRA_SHOW_ORIGINAL, showOriginal)
+			putExtra(SubtitleOverlayService.EXTRA_SHOW_TRANSLATION, showTranslation)
+			putExtra(SubtitleOverlayService.EXTRA_TRANSLATE_PARTIAL, translatePartial)
+		})
+	}
+
+	private fun broadcastVadUpdated() {
+		RecorderLogger.d("OverlayService", "VAD updated (will apply on next start)")
+	}
+
+	companion object {
+		private const val PREFS_NAME = "realtime_prefs"
+		private const val KEY_COMMIT_STRATEGY = "commit_strategy"
+		private const val KEY_LANGUAGE_CODE = "language_code"
+		private const val DEFAULT_COMMIT_STRATEGY = "vad"
+		private const val KEY_CHUNK_MS = "chunk_ms"
+		private const val DEFAULT_CHUNK_MS = 1000
+		private const val KEY_SAMPLE_RATE = "sample_rate"
+		private const val DEFAULT_SAMPLE_RATE = 48000
+		private const val KEY_VAD_THRESHOLD = "vad_threshold"
+		private const val KEY_MIN_SPEECH_MS = "min_speech_duration_ms"
+		private const val KEY_MIN_SILENCE_MS = "min_silence_duration_ms"
+		private const val KEY_VAD_SILENCE_SECS = "vad_silence_threshold_secs"
+
+		private const val DEFAULT_VAD_THRESHOLD = 0.7f
+		private const val DEFAULT_MIN_SPEECH_MS = 60
+		private const val DEFAULT_MIN_SILENCE_MS = 120
+		private const val DEFAULT_VAD_SILENCE_SECS = 0.3f
+	}
+}

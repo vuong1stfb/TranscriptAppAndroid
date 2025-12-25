@@ -18,25 +18,16 @@ import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
-import com.example.transcriptapp.utils.RecordingConfig
-import com.example.transcriptapp.utils.RecordingConfigFactory
-import com.example.transcriptapp.utils.RecordingFileManager
-import java.io.File
-import com.example.transcriptapp.utils.ProjectionRecorder
-import com.example.transcriptapp.utils.MuxerCoordinator
+import com.example.transcriptapp.utils.transcript.RealtimeTranscriptionManager
 import com.example.transcriptapp.utils.RecorderLogger
 import com.example.transcriptapp.repository.AuthRepository
 import com.example.transcriptapp.repository.AuthRepositoryImpl
-import com.example.transcriptapp.utils.transcript.TranscriptionManager
 
 class ScreenRecordService : Service() {
 
     companion object {
         const val ACTION_START = "action_start"
         const val ACTION_STOP = "action_stop"
-        const val ACTION_SPLIT = "action_split"
-        const val ACTION_PAUSE = "action_pause" // Added for pause functionality
-        const val ACTION_RESUME = "action_resume" // Added for resume functionality
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
         const val EXTRA_OUTPUT_FILE_PATH = "output_file_path"
@@ -50,21 +41,14 @@ class ScreenRecordService : Service() {
     }
 
     private var mediaProjection: MediaProjection? = null
-    private var projectionRecorder: ProjectionRecorder? = null
-    private var muxerCoordinator: MuxerCoordinator? = null
-    private var outputFile: File? = null
-    private var previousFilePath: String? = null
+    private var realtimeManager: RealtimeTranscriptionManager? = null
     private var isRecording = false
-    private var recordingStartTime: Long = 0
-    private var recordingDuration: Long = 0
 
     private var projectionResultCode: Int = Activity.RESULT_CANCELED
     private var projectionResultData: Intent? = null
 
     private lateinit var mediaProjectionManager: MediaProjectionManager
     private lateinit var notificationManager: NotificationManager
-    private lateinit var recordingFileManager: RecordingFileManager
-    private lateinit var transcriptionManager: TranscriptionManager
     private lateinit var authRepository: AuthRepository
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -88,14 +72,12 @@ class ScreenRecordService : Service() {
         RecorderLogger.service("ScreenRecordService", "CREATE", "Service created")
         mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        recordingFileManager = RecordingFileManager(this)
-        
         // Create AuthService first
         val authService = com.example.transcriptapp.service.AuthServiceImpl()
         // Then create AuthRepository with the service
         authRepository = AuthRepositoryImpl(this, authService)
-        // Finally create TranscriptionManager
-        transcriptionManager = TranscriptionManager(this, authRepository)
+        // Realtime transcription manager
+        realtimeManager = RealtimeTranscriptionManager(this, authRepository)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -117,43 +99,6 @@ class ScreenRecordService : Service() {
                 startRecording(resultCode, resultData)
             }
             ACTION_STOP -> stopRecording()
-            ACTION_SPLIT -> {
-                RecorderLogger.media("ScreenRecordService", "SPLIT", "Splitting current recording segment")
-                // Create next file and rotate muxer if recorder is alive
-                val nextFile = recordingFileManager.createOutputFile()
-                val ok = projectionRecorder?.rotateMuxer(nextFile) ?: false
-                if (!ok) {
-                    // Fallback: do hard restart only when formats are not ready
-                    stopRecordingInternal(restartAfterStop = true, stopMediaProjection = false)
-                } else {
-                    // Optionally broadcast segment finalized event for previous file
-                    previousFilePath = outputFile?.absolutePath
-                    outputFile = nextFile
-                    if (previousFilePath != null) {
-                        sendRecordingStoppedBroadcast(previousFilePath!!)
-                        
-                        // Request transcription for the completed segment
-                        val completedVideoFile = File(previousFilePath!!)
-                        if (completedVideoFile.exists() && completedVideoFile.length() > 0) {
-                            RecorderLogger.d("ScreenRecordService", "Requesting transcription for: ${completedVideoFile.name}")
-                            transcriptionManager.transcribeVideoAndNotify(completedVideoFile)
-                        } else {
-                            RecorderLogger.e("ScreenRecordService", "Cannot transcribe: Invalid video file")
-                        }
-                    }
-                }
-            }
-            ACTION_PAUSE -> {
-                if (isRecording) {
-                    // Pause logic here
-                    sendRecordingStateBroadcast("paused") // Thông báo trạng thái pause
-                }
-            }
-            ACTION_RESUME -> {
-                // Resume logic here
-                isRecording = true
-                sendRecordingStateBroadcast("recording") // Thông báo trạng thái resume
-            }
         }
 
         return START_STICKY
@@ -208,30 +153,36 @@ class ScreenRecordService : Service() {
             RecorderLogger.methodEntry("ScreenRecordService", "startRecordingInternal")
 
             val projection = acquireMediaProjection()
-
-            val config = RecordingConfigFactory.create(resources.displayMetrics)
-            logRecordingConfig(config)
-
-            outputFile = recordingFileManager.createOutputFile()
-
-            muxerCoordinator = MuxerCoordinator(outputFile ?: throw IllegalStateException("Output file missing"))
-
             registerMediaProjectionCallbackIfNeeded()
+            val prefs = getSharedPreferences("realtime_prefs", MODE_PRIVATE)
+            val commitStrategy = prefs.getString("commit_strategy", "vad") ?: "vad"
+            val languageCode = prefs.getString("language_code", "") ?: ""
+            val chunkMs = prefs.getInt("chunk_ms", 1000)
+            val sampleRate = prefs.getInt("sample_rate", 48000)
+            val vadThreshold = prefs.getFloat("vad_threshold", 0.7f)
+            val minSpeechMs = prefs.getInt("min_speech_duration_ms", 60)
+            val minSilenceMs = prefs.getInt("min_silence_duration_ms", 120)
+            val vadSilenceSecs = prefs.getFloat("vad_silence_threshold_secs", 0.3f)
 
-            projectionRecorder = ProjectionRecorder(
-                mediaProjection = projection,
-                recordingConfig = config,
-                muxerCoordinator = muxerCoordinator ?: throw IllegalStateException("MuxerCoordinator missing"),
-                outputFile = outputFile ?: throw IllegalStateException("Output file missing")
-            ).also { recorder ->
-                recorder.start()
-            }
-
+            RecorderLogger.d(
+                "ScreenRecordService",
+                "Starting realtime manager (projection=${projection.hashCode()}) commit=$commitStrategy vad=$vadThreshold minSpeech=$minSpeechMs minSilence=$minSilenceMs vadSilence=$vadSilenceSecs"
+            )
+            realtimeManager?.start(
+                projection,
+                languageCode = languageCode,
+                chunkMs = chunkMs,
+                sampleRate = sampleRate,
+                commitStrategy = commitStrategy,
+                vadThreshold = vadThreshold,
+                minSpeechDurationMs = minSpeechMs,
+                minSilenceDurationMs = minSilenceMs,
+                vadSilenceThresholdSecs = vadSilenceSecs
+            )
             isRecording = true
-            recordingStartTime = System.currentTimeMillis()
 
-            RecorderLogger.media("ScreenRecordService", "START", "Recording started with system audio only")
-            updateNotification("Recording system audio…")
+            RecorderLogger.media("ScreenRecordService", "START", "Realtime transcription started")
+            updateNotification("Realtime transcript…")
             sendRecordingStateBroadcast("recording") // Thông báo trạng thái bắt đầu ghi
 
         } catch (e: Exception) {
@@ -259,56 +210,10 @@ class ScreenRecordService : Service() {
                 return
             }
 
-            // Check minimum recording time
-            val currentTime = System.currentTimeMillis()
-            val elapsedTime = currentTime - recordingStartTime
-
-            if (elapsedTime < 2000) { // 2 seconds minimum
-                RecorderLogger.w("ScreenRecordService", "Recording too short (${elapsedTime}ms), delaying stop")
-                mainHandler.postDelayed({
-                    stopRecordingInternal()
-                }, 2000 - elapsedTime)
-                return
-            }
-
             stopRecordingInternal()
             sendRecordingStateBroadcast("stopped") // Thông báo trạng thái dừng ghi
         } catch (e: Exception) {
             RecorderLogger.e("ScreenRecordService", "Error stopping recording", e)
-            cleanup()
-            stopSelf()
-        }
-    }
-
-    private fun splitRecording() {
-        try {
-            RecorderLogger.media("ScreenRecordService", "SPLIT", "Splitting current recording segment")
-
-            if (!isRecording) {
-                RecorderLogger.w("ScreenRecordService", "Split requested with no active recording")
-                return
-            }
-
-            if (mediaProjection == null) {
-                RecorderLogger.e("ScreenRecordService", "MediaProjection unavailable during split request")
-                cleanup()
-                stopSelf()
-                return
-            }
-
-            stopRecordingInternal(restartAfterStop = true, stopMediaProjection = false)
-
-            try {
-                acquireMediaProjection()
-            } catch (e: Exception) {
-                RecorderLogger.e("ScreenRecordService", "MediaProjection unavailable after split", e)
-                stopSelf()
-                return
-            }
-
-            startRecordingInternal()
-        } catch (e: Exception) {
-            RecorderLogger.e("ScreenRecordService", "Error handling split request", e)
             cleanup()
             stopSelf()
         }
@@ -338,54 +243,11 @@ class ScreenRecordService : Service() {
                 }
                 return
             }
-
-            val finalOutput = outputFile
-            if (finalOutput == null) {
-                RecorderLogger.e("ScreenRecordService", "Output file reference missing")
-                cleanup(stopMediaProjection = stopMediaProjection)
-                isRecording = false
-                if (!restartAfterStop) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    RecorderLogger.service("ScreenRecordService", "BACKGROUND", "Service stopped foreground state (missing file)")
-                }
-                if (!restartAfterStop) {
-                    stopSelf()
-                }
-                return
-            }
-
-            recordingDuration = System.currentTimeMillis() - recordingStartTime
-
             if (!stopMediaProjection) {
                 unregisterMediaProjectionCallbackIfNeeded()
             }
 
             cleanup(stopMediaProjection = stopMediaProjection)
-
-            if (finalOutput.exists() && finalOutput.length() > 0) {
-                RecorderLogger.file("ScreenRecordService", "VERIFY", finalOutput.absolutePath, finalOutput.length())
-                val event = if (restartAfterStop) "SPLIT_SEGMENT" else "STOP"
-                RecorderLogger.media(
-                    "ScreenRecordService",
-                    event,
-                    "Recording segment finalized (${recordingDuration}ms)"
-                )
-                recordingFileManager.logMetadata(finalOutput, recordingDuration)
-                sendRecordingStoppedBroadcast(finalOutput.absolutePath)
-                
-                // Request transcription when a recording is stopped (and not part of a split-restart)
-                if (!restartAfterStop) {
-                    RecorderLogger.d("ScreenRecordService", "Requesting transcription for: ${finalOutput.name}")
-                    transcriptionManager.transcribeVideoAndNotify(finalOutput)
-                }
-            } else {
-                RecorderLogger.e(
-                    "ScreenRecordService",
-                    "Recording file is empty or missing at ${finalOutput.absolutePath}"
-                )
-            }
-
-            outputFile = null
             isRecording = false
 
             if (!restartAfterStop) {
@@ -412,9 +274,7 @@ class ScreenRecordService : Service() {
 
             mainHandler.removeCallbacksAndMessages(null)
 
-            projectionRecorder?.runCatching { stop() }
-                ?.onFailure { RecorderLogger.e("ScreenRecordService", "Error stopping recorder during cleanup", it) }
-            projectionRecorder = null
+            realtimeManager?.stop()
 
             if (stopMediaProjection) {
                 unregisterMediaProjectionCallbackIfNeeded()
@@ -478,17 +338,6 @@ class ScreenRecordService : Service() {
             setPackage(packageName)
         }
         sendBroadcast(intent)
-    }
-
-    private fun logRecordingConfig(config: RecordingConfig) {
-        RecorderLogger.d(
-            "ScreenRecordService",
-            "Original screen dimensions: ${config.screen.widthPx} x ${config.screen.heightPx}, DPI: ${config.screen.densityDpi}"
-        )
-        RecorderLogger.d(
-            "ScreenRecordService",
-            "Scaled dimensions: ${config.dimensions.widthPx} x ${config.dimensions.heightPx}"
-        )
     }
 
     private fun createNotificationChannel() {

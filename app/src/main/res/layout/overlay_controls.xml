@@ -17,18 +17,33 @@
 	android:alpha="0.95"
 	android:layout_margin="1dp">
 
-		<TextView
-			android:id="@+id/tvState"
+		<LinearLayout
 			android:layout_width="wrap_content"
-			android:layout_height="22dp"
-			android:text="State: stopped"
-			android:textColor="@android:color/black"
-			android:textStyle="bold"
-			android:textSize="12sp"
-			android:gravity="center_vertical"
-			android:layout_marginEnd="8dp"
-			android:paddingStart="6dp"
-			android:paddingEnd="6dp" />
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:gravity="center_vertical">
+
+			<TextView
+				android:id="@+id/tvState"
+				android:layout_width="wrap_content"
+				android:layout_height="22dp"
+				android:text="State: stopped"
+				android:textColor="@android:color/black"
+				android:textStyle="bold"
+				android:textSize="12sp"
+				android:gravity="center_vertical"
+				android:layout_marginEnd="6dp"
+				android:paddingStart="6dp"
+				android:paddingEnd="6dp" />
+
+			<ImageButton
+				android:id="@+id/btnCloseOptions"
+				android:layout_width="22dp"
+				android:layout_height="22dp"
+				android:background="@android:color/transparent"
+				android:src="@android:drawable/ic_menu_close_clear_cancel"
+				android:contentDescription="Close" />
+		</LinearLayout>
 
 		<LinearLayout
 			android:layout_width="wrap_content"
@@ -53,51 +68,6 @@
 				android:textSize="12sp" />
 
 			<Button
-				android:id="@+id/btnPause"
-				android:layout_width="wrap_content"
-				android:layout_height="36dp"
-				android:minWidth="72dp"
-				android:minHeight="36dp"
-				android:layout_marginTop="4dp"
-				android:paddingStart="8dp"
-				android:paddingEnd="8dp"
-				android:text="Pause"
-				android:textColor="@android:color/white"
-				android:backgroundTint="@android:color/holo_orange_dark"
-				android:textStyle="bold"
-				android:textSize="12sp" />
-
-			<Button
-				android:id="@+id/btnResume"
-				android:layout_width="wrap_content"
-				android:layout_height="36dp"
-				android:minWidth="72dp"
-				android:minHeight="36dp"
-				android:layout_marginTop="4dp"
-				android:paddingStart="8dp"
-				android:paddingEnd="8dp"
-				android:text="Resume"
-				android:textColor="@android:color/white"
-				android:backgroundTint="@android:color/holo_blue_dark"
-				android:textStyle="bold"
-				android:textSize="12sp" />
-
-			<Button
-				android:id="@+id/btnSplit"
-				android:layout_width="wrap_content"
-				android:layout_height="36dp"
-				android:minWidth="72dp"
-				android:minHeight="36dp"
-				android:layout_marginTop="4dp"
-				android:paddingStart="8dp"
-				android:paddingEnd="8dp"
-				android:text="Split"
-				android:textColor="@android:color/white"
-				android:backgroundTint="@android:color/holo_purple"
-				android:textStyle="bold"
-				android:textSize="12sp" />
-
-			<Button
 				android:id="@+id/btnStop"
 				android:layout_width="wrap_content"
 				android:layout_height="36dp"
@@ -114,7 +84,176 @@
 
 		</LinearLayout>
 
-		<!-- auto-split UI removed; overlay is display-only for controls -->
+		<LinearLayout
+			android:id="@+id/optionsRow"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:gravity="center_vertical"
+			android:paddingTop="2dp"
+			android:paddingBottom="2dp">
+
+			<CheckBox
+				android:id="@+id/chkShowOriginal"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="Goc"
+				android:textSize="10sp"
+				android:padding="0dp" />
+
+			<CheckBox
+				android:id="@+id/chkShowTranslation"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="Dich"
+				android:textSize="10sp"
+				android:padding="0dp"
+				android:layout_marginStart="6dp" />
+
+			<CheckBox
+				android:id="@+id/chkTranslatePartial"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="Partial"
+				android:textSize="10sp"
+				android:padding="0dp"
+				android:layout_marginStart="6dp" />
+
+			<CheckBox
+				android:id="@+id/chkManualCommit"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="Manual"
+				android:textSize="10sp"
+				android:padding="0dp"
+				android:layout_marginStart="6dp" />
+		</LinearLayout>
+
+		<LinearLayout
+			android:id="@+id/langRow"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:gravity="center_vertical"
+			android:paddingTop="2dp"
+			android:paddingBottom="2dp">
+
+			<TextView
+				android:id="@+id/tvLangLabel"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="Lang"
+				android:textSize="10sp"
+				android:textColor="@android:color/black"
+				android:layout_marginEnd="4dp" />
+
+			<Spinner
+				android:id="@+id/spnLanguage"
+				android:layout_width="72dp"
+				android:layout_height="wrap_content"
+				android:spinnerMode="dropdown" />
+
+			<TextView
+				android:id="@+id/tvChunkLabel"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="Chunk(ms)"
+				android:textSize="10sp"
+				android:textColor="@android:color/black"
+				android:layout_marginStart="6dp"
+				android:layout_marginEnd="4dp" />
+
+			<EditText
+				android:id="@+id/etChunkMs"
+				android:layout_width="52dp"
+				android:layout_height="28dp"
+				android:hint="1000"
+				android:inputType="number"
+				android:textSize="10sp"
+				android:padding="4dp" />
+		</LinearLayout>
+
+		<LinearLayout
+			android:id="@+id/sampleRateRow"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:gravity="center_vertical"
+			android:paddingTop="2dp"
+			android:paddingBottom="2dp">
+
+			<TextView
+				android:id="@+id/tvSampleRateLabel"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="PCM"
+				android:textSize="10sp"
+				android:textColor="@android:color/black"
+				android:layout_marginEnd="4dp" />
+
+			<Spinner
+				android:id="@+id/spnSampleRate"
+				android:layout_width="72dp"
+				android:layout_height="wrap_content"
+				android:spinnerMode="dropdown" />
+		</LinearLayout>
+
+		<LinearLayout
+			android:id="@+id/vadRow"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:gravity="center_vertical"
+			android:paddingTop="2dp"
+			android:paddingBottom="2dp">
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="VAD"
+				android:textSize="10sp"
+				android:textColor="@android:color/black"
+				android:layout_marginEnd="4dp" />
+
+			<EditText
+				android:id="@+id/etVadThreshold"
+				android:layout_width="48dp"
+				android:layout_height="28dp"
+				android:hint="thr"
+				android:inputType="numberDecimal"
+				android:textSize="10sp"
+				android:padding="4dp" />
+
+			<EditText
+				android:id="@+id/etMinSpeechMs"
+				android:layout_width="48dp"
+				android:layout_height="28dp"
+				android:hint="sp"
+				android:inputType="number"
+				android:textSize="10sp"
+				android:padding="4dp"
+				android:layout_marginStart="4dp" />
+
+			<EditText
+				android:id="@+id/etMinSilenceMs"
+				android:layout_width="48dp"
+				android:layout_height="28dp"
+				android:hint="sil"
+				android:inputType="number"
+				android:textSize="10sp"
+				android:padding="4dp"
+				android:layout_marginStart="4dp" />
+
+			<EditText
+				android:id="@+id/etVadSilenceSecs"
+				android:layout_width="48dp"
+				android:layout_height="28dp"
+				android:hint="sil_s"
+				android:inputType="numberDecimal"
+				android:textSize="10sp"
+				android:padding="4dp"
+				android:layout_marginStart="4dp" />
+		</LinearLayout>
 
 	</LinearLayout>
 

@@ -1,13 +1,14 @@
 package com.example.transcriptapp.service.translate
 
-import com.example.transcriptapp.model.translate.TranslationResponse
+import com.example.transcriptapp.utils.ApiConfig
 import com.example.transcriptapp.utils.RecorderLogger
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.net.URLEncoder
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 /**
@@ -18,9 +19,9 @@ class GoogleTranslateService {
     
     companion object {
         private const val TAG = "GoogleTranslateService"
-        private const val BASE_URL = "https://translate.googleapis.com/translate_a/single"
         private const val DEFAULT_TARGET_LANGUAGE = "vi" // Vietnamese
         private const val DEFAULT_SOURCE_LANGUAGE = "auto" // Auto-detect
+        private const val TRANSLATE_LIB = "te_lib"
     }
     
     private val okHttpClient = OkHttpClient.Builder()
@@ -32,12 +33,7 @@ class GoogleTranslateService {
     private val gson = Gson()
     
     /**
-     * Translate text using Google Translate free API
-     * 
-     * @param text Text to translate
-     * @param targetLanguage Target language code (default: vi for Vietnamese)
-     * @param sourceLanguage Source language code (default: auto for auto-detect)
-     * @return Translated text or null if translation fails
+     * Translate text using the same endpoint as extension (translate-pa)
      */
     suspend fun translateText(
         text: String,
@@ -56,14 +52,22 @@ class GoogleTranslateService {
                 "ja"
             } else sourceLanguage
 
-            val encodedText = URLEncoder.encode(text, "UTF-8")
-            val url = "$BASE_URL?client=gtx&dt=t&dj=1&sl=$resolvedSource&tl=$targetLanguage&q=$encodedText"
+            if (ApiConfig.TRANSLATE_API_KEY.isBlank()) {
+                RecorderLogger.e(TAG, "Missing TRANSLATE_API_KEY")
+                return@withContext null
+            }
 
-            RecorderLogger.d(TAG, "Translating text from '$resolvedSource' to '$targetLanguage': ${text.take(50)}...")
-            
+            val payload = gson.toJson(
+                listOf(
+                    listOf(listOf(text), resolvedSource, targetLanguage),
+                    TRANSLATE_LIB
+                )
+            )
             val request = Request.Builder()
-                .url(url)
-                .get()
+                .url(ApiConfig.TRANSLATE_API_ENDPOINT)
+                .post(payload.toRequestBody("application/json+protobuf".toMediaType()))
+                .addHeader("content-type", "application/json+protobuf")
+                .addHeader("x-goog-api-key", ApiConfig.TRANSLATE_API_KEY)
                 .build()
             
             val response = okHttpClient.newCall(request).execute()
@@ -78,20 +82,17 @@ class GoogleTranslateService {
                 RecorderLogger.e(TAG, "Translation API returned empty response")
                 return@withContext null
             }
-            
-            val translationResponse = gson.fromJson(responseBody, TranslationResponse::class.java)
-            
-            val translatedText = translationResponse.sentences
-                .map { it.trans }
-                .joinToString("")
-            
+
+            val parsed = gson.fromJson(responseBody, List::class.java) as? List<*>
+            val translations = (parsed?.getOrNull(0) as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+            val translatedText = translations.joinToString("")
+
             if (translatedText.isNotBlank()) {
                 RecorderLogger.d(TAG, "Translation successful: ${translatedText.take(50)}...")
                 return@withContext translatedText
-            } else {
-                RecorderLogger.e(TAG, "Translation result is empty")
-                return@withContext null
             }
+            RecorderLogger.e(TAG, "Translation result is empty")
+            return@withContext null
             
         } catch (e: Exception) {
             RecorderLogger.e(TAG, "Error during translation", e)
