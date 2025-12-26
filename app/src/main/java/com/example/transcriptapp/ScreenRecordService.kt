@@ -158,7 +158,7 @@ class ScreenRecordService : Service() {
             val commitStrategy = prefs.getString("commit_strategy", "vad") ?: "vad"
             val languageCode = prefs.getString("language_code", "") ?: ""
             val chunkMs = prefs.getInt("chunk_ms", 1000)
-            val sampleRate = prefs.getInt("sample_rate", 48000)
+            val sampleRate = prefs.getInt("sample_rate", 24000)
             val vadThreshold = prefs.getFloat("vad_threshold", 0.7f)
             val minSpeechMs = prefs.getInt("min_speech_duration_ms", 60)
             val minSilenceMs = prefs.getInt("min_silence_duration_ms", 120)

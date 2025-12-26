@@ -62,7 +62,7 @@ class RealtimeTranscriptionManager(
         mediaProjection: MediaProjection,
         chunkMs: Int = 1000,
         languageCode: String? = null,
-        sampleRate: Int = 48000,
+        sampleRate: Int = 24000,
         commitStrategy: String = "vad",
         vadThreshold: Float = 0.7f,
         minSpeechDurationMs: Int = 60,
@@ -187,7 +187,7 @@ class RealtimeTranscriptionManager(
         audioCapturer = null
         if (sentAnyChunk) {
             RecorderLogger.d(loggerTag, "Sending final commit")
-            client?.sendCommit(lastStartConfig?.sampleRate ?: 48000)
+            client?.sendCommit(lastStartConfig?.sampleRate ?: 24000)
         }
         client?.close()
         client = null

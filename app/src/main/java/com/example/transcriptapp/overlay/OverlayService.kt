@@ -268,7 +268,11 @@ class OverlayService : android.app.Service() {
 			RecorderLogger.d("OverlayService", "chunk_ms=$value (apply on next start)")
 		}
 
-		val sampleRateOptions = listOf(16000, 24000, 48000)
+		val sampleRateOptions = listOf(16000, 22050, 24000)
+		val safeSampleRate = if (sampleRateOptions.contains(sampleRate)) sampleRate else DEFAULT_SAMPLE_RATE
+		if (safeSampleRate != sampleRate) {
+			prefs.edit().putInt(KEY_SAMPLE_RATE, safeSampleRate).apply()
+		}
 		val sampleAdapter = ArrayAdapter(
 			root.context,
 			R.layout.spinner_item,
@@ -277,7 +281,7 @@ class OverlayService : android.app.Service() {
 			setDropDownViewResource(R.layout.spinner_dropdown_item)
 		}
 		spnSampleRate.adapter = sampleAdapter
-		val sampleIndex = sampleRateOptions.indexOf(sampleRate).takeIf { it >= 0 } ?: sampleRateOptions.size - 1
+		val sampleIndex = sampleRateOptions.indexOf(safeSampleRate).takeIf { it >= 0 } ?: sampleRateOptions.size - 1
 		spnSampleRate.setSelection(sampleIndex, false)
 		spnSampleRate.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
 			override fun onItemSelected(
@@ -535,7 +539,7 @@ class OverlayService : android.app.Service() {
 		private const val KEY_CHUNK_MS = "chunk_ms"
 		private const val DEFAULT_CHUNK_MS = 1000
 		private const val KEY_SAMPLE_RATE = "sample_rate"
-		private const val DEFAULT_SAMPLE_RATE = 48000
+		private const val DEFAULT_SAMPLE_RATE = 24000
 		private const val KEY_VAD_THRESHOLD = "vad_threshold"
 		private const val KEY_MIN_SPEECH_MS = "min_speech_duration_ms"
 		private const val KEY_MIN_SILENCE_MS = "min_silence_duration_ms"
