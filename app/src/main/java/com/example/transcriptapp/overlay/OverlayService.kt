@@ -233,7 +233,7 @@ class OverlayService : android.app.Service() {
 			"en" to "EN",
 			"ko" to "KO",
 			"ja" to "JA",
-			"zh" to "ZH"
+			"zh" to "Chinese"
 		)
 		val adapter = ArrayAdapter(
 			root.context,
@@ -539,7 +539,7 @@ class OverlayService : android.app.Service() {
 		private const val KEY_CHUNK_MS = "chunk_ms"
 		private const val DEFAULT_CHUNK_MS = 1000
 		private const val KEY_SAMPLE_RATE = "sample_rate"
-		private const val DEFAULT_SAMPLE_RATE = 24000
+		private const val DEFAULT_SAMPLE_RATE = 16000
 		private const val KEY_VAD_THRESHOLD = "vad_threshold"
 		private const val KEY_MIN_SPEECH_MS = "min_speech_duration_ms"
 		private const val KEY_MIN_SILENCE_MS = "min_silence_duration_ms"

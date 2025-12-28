@@ -157,8 +157,9 @@ class ScreenRecordService : Service() {
             val prefs = getSharedPreferences("realtime_prefs", MODE_PRIVATE)
             val commitStrategy = prefs.getString("commit_strategy", "vad") ?: "vad"
             val languageCode = prefs.getString("language_code", "") ?: ""
+            val sanitizedLanguageCode = languageCode.trim().ifEmpty { null }
             val chunkMs = prefs.getInt("chunk_ms", 1000)
-            val sampleRate = prefs.getInt("sample_rate", 24000)
+            val sampleRate = prefs.getInt("sample_rate", 16000)
             val vadThreshold = prefs.getFloat("vad_threshold", 0.7f)
             val minSpeechMs = prefs.getInt("min_speech_duration_ms", 60)
             val minSilenceMs = prefs.getInt("min_silence_duration_ms", 120)
@@ -170,7 +171,7 @@ class ScreenRecordService : Service() {
             )
             realtimeManager?.start(
                 projection,
-                languageCode = languageCode,
+                languageCode = sanitizedLanguageCode,
                 chunkMs = chunkMs,
                 sampleRate = sampleRate,
                 commitStrategy = commitStrategy,

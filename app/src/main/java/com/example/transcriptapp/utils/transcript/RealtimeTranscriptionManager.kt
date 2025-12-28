@@ -62,7 +62,7 @@ class RealtimeTranscriptionManager(
         mediaProjection: MediaProjection,
         chunkMs: Int = 1000,
         languageCode: String? = null,
-        sampleRate: Int = 24000,
+        sampleRate: Int = 16000,
         commitStrategy: String = "vad",
         vadThreshold: Float = 0.7f,
         minSpeechDurationMs: Int = 60,
@@ -98,10 +98,13 @@ class RealtimeTranscriptionManager(
             }
             RecorderLogger.d(loggerTag, "Fetched xi-api-key (len=${apiKey?.length ?: 0})")
 
+            val sanitizedLanguage = languageCode?.trim().orEmpty()
             val wsUrl = buildWsUrl(
                 ApiConfig.REALTIME_TRANSCRIPT_WS,
                 buildMap {
-                    put("language_code", languageCode ?: "")
+                    if (sanitizedLanguage.isNotEmpty()) {
+                        put("language_code", sanitizedLanguage)
+                    }
                     put("commit_strategy", commitStrategy)
                     if (commitStrategy == "vad") {
                         put("vad_threshold", vadThreshold.toString())
@@ -187,7 +190,7 @@ class RealtimeTranscriptionManager(
         audioCapturer = null
         if (sentAnyChunk) {
             RecorderLogger.d(loggerTag, "Sending final commit")
-            client?.sendCommit(lastStartConfig?.sampleRate ?: 24000)
+            client?.sendCommit(lastStartConfig?.sampleRate ?: 16000)
         }
         client?.close()
         client = null
@@ -304,10 +307,13 @@ class RealtimeTranscriptionManager(
                 return@launch
             }
 
+            val sanitizedLanguage = config.languageCode?.trim().orEmpty()
             val wsUrl = buildWsUrl(
                 ApiConfig.REALTIME_TRANSCRIPT_WS,
                 buildMap {
-                    put("language_code", config.languageCode ?: "")
+                    if (sanitizedLanguage.isNotEmpty()) {
+                        put("language_code", sanitizedLanguage)
+                    }
                     put("commit_strategy", config.commitStrategy)
                     if (config.commitStrategy == "vad") {
                         put("vad_threshold", config.vadThreshold.toString())
